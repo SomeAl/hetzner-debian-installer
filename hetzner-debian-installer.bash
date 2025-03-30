@@ -1,7 +1,7 @@
 #!/bin/bash
 exec 3>&1 4>&2  
 exec > >(tee hetzner-debian-installer.log) 2>&1  
-set -xe  
+#set -xe  
 
 CONFIG_FILE="hetzner-debian-installer.conf"
 SESSION_NAME="debian_install"
@@ -162,7 +162,7 @@ configure_debian_install() {
     read -rp "Enter Debian repository mirror [http://ftp.de.debian.org/debian/]: " DEBIAN_MIRROR
     DEBIAN_MIRROR="${DEBIAN_MIRROR:-http://ftp.de.debian.org/debian/}"
     # Validate mirror availability with a simple HTTP HEAD request
-    if ! wget --spider -q "$DEBIAN_MIRROR"; then; then
+    if ! wget --spider -q "$DEBIAN_MIRROR"; then 
         echo "Error: Debian mirror '$DEBIAN_MIRROR' is not reachable. Exiting."
         exit 1
     fi
