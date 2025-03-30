@@ -141,19 +141,6 @@ configure_partitioning() {
         echo "Invalid boot filesystem type. Defaulting to ext3."
         PART_BOOT_FS="ext3"
     fi
-
-    echo "Saving configuration to $CONFIG_FILE..."
-    cat > "$CONFIG_FILE" <<EOF
-PART_DRIVE1="$PART_DRIVE1"
-PART_DRIVE2="$PART_DRIVE2"
-PART_USE_RAID="$PART_USE_RAID"
-PART_RAID_LEVEL="$PART_RAID_LEVEL"
-PART_BOOT_SIZE="$PART_BOOT_SIZE"
-PART_SWAP_SIZE="$PART_SWAP_SIZE"
-PART_ROOT_FS="$PART_ROOT_FS"
-PART_BOOT_FS="$PART_BOOT_FS"
-EOF
-    echo "Configuration saved successfully."
 }
 
 configure_debian_install() {
@@ -175,7 +162,7 @@ configure_debian_install() {
     read -rp "Enter Debian repository mirror [http://ftp.de.debian.org/debian/]: " DEBIAN_MIRROR
     DEBIAN_MIRROR="${DEBIAN_MIRROR:-http://ftp.de.debian.org/debian/}"
     # Validate mirror availability with a simple HTTP HEAD request
-    if ! curl -Is "$DEBIAN_MIRROR" --max-time 5 | head -n 1 | grep -q "200"; then
+    if ! wget --spider -q "$DEBIAN_MIRROR"; then; then
         echo "Error: Debian mirror '$DEBIAN_MIRROR' is not reachable. Exiting."
         exit 1
     fi
@@ -189,8 +176,6 @@ configure_debian_install() {
     read -rp "Enter installation target mount point for / [/mnt/md0p3]: " INSTALL_TARGET
     INSTALL_TARGET_ROOT="${INSTALL_TARGET_ROOT:-/mnt/md0p1}"
 }
-
-
 
 configure_network() {
     echo "[Configuring] Network parameters"
@@ -312,21 +297,45 @@ summary_and_confirm() {
     read -rp "Start installation with these settings? (yes/no): " CONFIRM
     if [ "$CONFIRM" != "yes" ]; then
         echo "Installation aborted by user."
-        echo "Whant save config file?"
-
+        read -rp "Do you want to save the configuration? (yes/no): " SAVE_CONFIG
+        if [ "$SAVE_CONFIG" == "yes" ]; then
+            save_configuration
+        fi
         exit 1
     fi
-
-
 }
 
-save_configuration(){
-    "DEBIAN_RELEASE="$DEBIAN_RELEASE
-    "DEBIAN_MIRROR="$DEBIAN_MIRROR
-    "INSTALL_TARGET_BOOT="$INSTALL_TARGET_BOOT
-    "INSTALL_TARGET_SWAP="$INSTALL_TARGET_SWAP
-    "INSTALL_TARGET_ROOT="$INSTALL_TARGET_ROOT
-
+save_configuration() {
+    CONFIG_LINES=(
+        "# Partitioning"
+        "PART_DRIVE1=${PART_DRIVE1}"
+        "PART_DRIVE2=${PART_DRIVE2}"
+        "PART_USE_RAID=${PART_USE_RAID}"
+        "PART_RAID_LEVEL=${PART_RAID_LEVEL}"
+        "PART_BOOT_SIZE=${PART_BOOT_SIZE}"
+        "PART_SWAP_SIZE=${PART_SWAP_SIZE}"
+        "PART_ROOT_FS=${PART_ROOT_FS}"
+        "PART_BOOT_FS=${PART_BOOT_FS}"
+        ""
+        "# Debian installation"
+        "DEBIAN_RELEASE=${DEBIAN_RELEASE}"
+        "DEBIAN_MIRROR=${DEBIAN_MIRROR}"
+        "INSTALL_TARGET_BOOT=${INSTALL_TARGET_BOOT}"
+        "INSTALL_TARGET_SWAP=${INSTALL_TARGET_SWAP}"
+        "INSTALL_TARGET_ROOT=${INSTALL_TARGET_ROOT}"
+        ""
+        "# Network"
+        "NETWORK_USE_DHCP=${NETWORK_USE_DHCP}"
+        ""
+        "# Bootloader"
+        "GRUB_TARGET_DRIVES=${GRUB_TARGET_DRIVES[*]}"
+        ""
+        "# System settings"
+        "HOSTNAME=${HOSTNAME}"
+    )
+    printf "%s\n" "${CONFIG_LINES[@]}" > "$CONFIG_FILE"
+    echo "Configuration saved to $CONFIG_FILE"
+    echo ""
 }
 
 ### Entrypoints ###
