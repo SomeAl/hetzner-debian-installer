@@ -1,7 +1,7 @@
 #!/bin/bash
-#exec 3>&1 4>&2  
-#exec > >(tee hetzner-debian-installer.log) 2>&1  
-#set -xe  
+exec 3>&1 4>&2  
+exec > >(tee hetzner-debian-installer.log) 2>&1  
+set -xe  
 
 CONFIG_FILE="hetzner-debian-installer.conf"
 SESSION_NAME="debian_install"
@@ -188,18 +188,6 @@ configure_debian_install() {
     
     read -rp "Enter installation target mount point for / [/mnt/md0p3]: " INSTALL_TARGET
     INSTALL_TARGET_ROOT="${INSTALL_TARGET_ROOT:-/mnt/md0p1}"
-
-    # Confirm that the target disk is unmounted in the run_debian_install function later.
-    # Save parameters to configuration file.
-    echo "Saving Debian installation parameters to $CONFIG_FILE..."
-    cat >> "$CONFIG_FILE" <<EOF
-DEBIAN_RELEASE="$DEBIAN_RELEASE"
-DEBIAN_MIRROR="$DEBIAN_MIRROR"
-INSTALL_TARGET_BOOT="$INSTALL_TARGET_BOOT"
-INSTALL_TARGET_SWAP="$INSTALL_TARGET_SWAP"
-INSTALL_TARGET_ROOT="$INSTALL_TARGET_ROOT"
-EOF
-    echo "Debian installation configuration saved successfully."
 }
 
 
@@ -324,8 +312,21 @@ summary_and_confirm() {
     read -rp "Start installation with these settings? (yes/no): " CONFIRM
     if [ "$CONFIRM" != "yes" ]; then
         echo "Installation aborted by user."
+        echo "Whant save config file?"
+
         exit 1
     fi
+
+
+}
+
+save_configuration(){
+    "DEBIAN_RELEASE="$DEBIAN_RELEASE
+    "DEBIAN_MIRROR="$DEBIAN_MIRROR
+    "INSTALL_TARGET_BOOT="$INSTALL_TARGET_BOOT
+    "INSTALL_TARGET_SWAP="$INSTALL_TARGET_SWAP
+    "INSTALL_TARGET_ROOT="$INSTALL_TARGET_ROOT
+
 }
 
 ### Entrypoints ###
