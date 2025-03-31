@@ -382,9 +382,11 @@ summary_and_confirm() {
     echo "GRUB targets:          ${GRUB_TARGET_DRIVES[*]}"
     echo "Hostname:              $HOSTNAME"
     echo "----------------------------------------"
-    read -rp "Start installation with these settings? (yes/no)[no]: " ${CONFIRM:-no}
+    read -rp "Start installation with these settings? (yes/no)[no]: " CONFIRM
+    CONFIRM=${CONFIRM:-no}
     if [ "$CONFIRM" == "yes" ]; then
-        read -rp "Do you want to save the configuration? (yes/no) [yes]: " ${SAVE_CONFIG:-yes}
+        read -rp "Do you want to save the configuration? (yes/no) [yes]: " SAVE_CONFIG
+        SAVE_CONFIG=${SAVE_CONFIG:-yes}
         if [ "$SAVE_CONFIG" == "yes" ]; then
             save_configuration
         fi
