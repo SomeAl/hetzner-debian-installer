@@ -188,7 +188,7 @@ configure_debian_install() {
 
     # Массив точек монтирования
     declare -A MOUNT_POINTS=(
-        ["BOOT"]="/mnt/md0p1"
+        ["BOOT"]="/mnt/md0p2"
         ["SWAP"]="/mnt/md0p2"
         ["ROOT"]="/mnt/md0p3"
     )
@@ -267,7 +267,7 @@ run_partitioning() {
             parted -s "$disk" mkpart primary ext4 1MiB 100%
         done
 
-        RAID_PART1="${PART_DRIVE1}p1"
+        RAID_PART1="/dev/md2"
         RAID_PART2="${PART_DRIVE2}p1"
         echo "Creating RAID${PART_RAID_LEVEL} array on $RAID_PART1 and $RAID_PART2..."
         mdadm --create --verbose /dev/md0 --level="$PART_RAID_LEVEL" --raid-devices=2 "$RAID_PART1" "$RAID_PART2"
@@ -314,8 +314,8 @@ run_debian_install() {
 
     # Проверка и монтирование ROOT-раздела
     if ! mountpoint -q "${MOUNT_POINTS[ROOT]}"; then
-        echo "Mounting root partition (${PART_DRIVE1}p3) to ${MOUNT_POINTS[ROOT]}..."
-        mount "${PART_DRIVE1}p3" "${MOUNT_POINTS[ROOT]}" || {
+        echo "Mounting root partition (/dev/md0p3) to ${MOUNT_POINTS[ROOT]}..."
+        mount "/dev/md0p3" "${MOUNT_POINTS[ROOT]}" || {
             echo "Error: Failed to mount root partition on ${MOUNT_POINTS[ROOT]}. Exiting."
             exit 1
         }
@@ -326,8 +326,8 @@ run_debian_install() {
     # Проверка и монтирование BOOT-раздела (если задан)
     if [ -n "${MOUNT_POINTS[BOOT]}" ] && [ -d "${MOUNT_POINTS[BOOT]}" ]; then
         if ! mountpoint -q "${MOUNT_POINTS[BOOT]}"; then
-            echo "Mounting boot partition (${PART_DRIVE1}p1) to ${MOUNT_POINTS[BOOT]}..."
-            mount "${PART_DRIVE1}p1" "${MOUNT_POINTS[BOOT]}" || {
+            echo "Mounting boot partition (/dev/md0p1) to ${MOUNT_POINTS[BOOT]}..."
+            mount "/dev/md0p1" "${MOUNT_POINTS[BOOT]}" || {
                 echo "Error: Failed to mount boot partition. Exiting."
                 exit 1
             }
@@ -339,8 +339,8 @@ run_debian_install() {
     # Монтирование SWAP-раздела (если указан)
     if [ -n "${MOUNT_POINTS[SWAP]}" ] && [ -d "${MOUNT_POINTS[SWAP]}" ]; then
         if ! swapon --show | grep -q "${MOUNT_POINTS[SWAP]}"; then
-            echo "Activating swap partition (${PART_DRIVE1}p2)..."
-            swapon "${PART_DRIVE1}p2" || {
+            echo "Activating swap partition (/dev/md0p2..."
+            swapon "/dev/md0p2" || {
                 echo "Error: Failed to activate swap partition. Exiting."
                 exit 1
             }
