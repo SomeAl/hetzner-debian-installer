@@ -195,13 +195,29 @@ configure_debian_install() {
         fi
     }
 
+    # Функция проверки монтирования и размонтирования
+    ensure_unmounted() {
+        local mount_point=$1
+        if findmnt -r "$mount_point" >/dev/null 2>&1; then
+            echo "Warning: $mount_point is currently mounted."
+            read -rp "Do you want to unmount it? (y/N): " confirm
+            if [[ "$confirm" =~ ^[Yy]$ ]]; then
+                umount -l "$mount_point" || { echo "Error: Failed to unmount $mount_point. Exiting."; exit 1; }
+                echo "Unmounted: $mount_point"
+            else
+                echo "Error: Installation cannot proceed with mounted target. Exiting."
+                exit 1
+            fi
+        fi
+    }
+
     # Запрос у пользователя и проверка точек монтирования
     for key in "${!MOUNT_POINTS[@]}"; do
         read -rp "Enter installation target mount point for ${key} [${MOUNT_POINTS[$key]}]: " user_input
         MOUNT_POINTS[$key]="${user_input:-${MOUNT_POINTS[$key]}}"
+        ensure_unmounted "${MOUNT_POINTS[$key]}"
         validate_mount_point "${MOUNT_POINTS[$key]}"
     done
-
 }
 
 
