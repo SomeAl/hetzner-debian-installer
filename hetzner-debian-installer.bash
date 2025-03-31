@@ -1,7 +1,16 @@
 #!/bin/bash
 exec 3>&1 4>&2  
-exec > >(tee hetzner-debian-installer.log) 2>&1  
-set -xe  
+exec > >(tee -a hetzner-debian-installer.log) 2> >(tee -a hetzner-debian-installer.log >&2)  
+set -xe
+
+log() {
+    echo "[INFO] $@" | tee /dev/fd/3
+}
+
+log_error() {
+    echo "[ERROR] $@" | tee /dev/fd/3 >&2
+}
+
 
 CONFIG_FILE="hetzner-debian-installer.conf"
 SESSION_NAME="debian_install"
@@ -382,7 +391,6 @@ summary_and_confirm() {
         echo "Installation aborted by user."
         exit 1
     fi
-
 }
 
 save_configuration() {
