@@ -267,7 +267,7 @@ run_partitioning() {
             parted -s "$disk" mkpart primary ext4 1MiB 100%
         done
 
-        RAID_PART1="/dev/md2"
+        RAID_PART1="${PART_DRIVE1}p1"
         RAID_PART2="${PART_DRIVE2}p1"
         echo "Creating RAID${PART_RAID_LEVEL} array on $RAID_PART1 and $RAID_PART2..."
         mdadm --create --verbose /dev/md0 --level="$PART_RAID_LEVEL" --raid-devices=2 "$RAID_PART1" "$RAID_PART2"
