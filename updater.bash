@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # === Настройки ===
-REPO_DIR="."  # Укажите путь к локальному репозиторию
+REPO_DIR="/root/hetzner-debian-installer/"  # Укажите путь к локальному репозиторию
 BRANCH="main"                  # Ветка, за которой следить
 GIT_REMOTE="origin"            # Удаленный репозиторий
 
@@ -20,6 +20,7 @@ update_repo() {
         echo "Обнаружены изменения. Выполняем pull..."
         git pull "$GIT_REMOTE" "$BRANCH"
         echo "Обновление завершено."
+        chmod +x $REPO_DIR
     else
         echo "Нет новых изменений."
     fi
