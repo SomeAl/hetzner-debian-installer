@@ -1,7 +1,7 @@
 #!/bin/bash
 exec 3>&1 4>&2  
 exec > >(tee hetzner-debian-installer.log) 2>&1  
-#set -xe  
+#set -e  
 
 CONFIG_FILE="hetzner-debian-installer.conf"
 SESSION_NAME="debian_install"
