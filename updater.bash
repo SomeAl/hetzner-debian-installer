@@ -18,7 +18,15 @@ update_repo() {
 
     if [ "$LOCAL_COMMIT" != "$REMOTE_COMMIT" ]; then
         echo "Обнаружены изменения. Выполняем pull..."
-        git pull "$GIT_REMOTE" "$BRANCH"
+
+        echo "Сброс локальных изменений..."
+        git reset --hard "$GIT_REMOTE/$BRANCH"
+
+        echo "Обновляем данные из удаленного репозитория..."
+        git fetch --all
+        git reset --hard "$GIT_REMOTE/$BRANCH"
+        git pull --force "$GIT_REMOTE" "$BRANCH"
+
         echo "Обновление завершено."
         chmod +x `${$REPO_DIR}*`
     else
