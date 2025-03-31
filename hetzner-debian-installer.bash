@@ -295,7 +295,7 @@ summary_and_confirm() {
     echo "Hostname:              $HOSTNAME"
     echo "----------------------------------------"
     read -rp "Start installation with these settings? (yes/no): " CONFIRM
-    if [ "$CONFIRM" != "yes" ]; then
+    if [ "$CONFIRM" == "yes" ]; then
         read -rp "Do you want to save the configuration? (yes/no): " SAVE_CONFIG
         if [ "$SAVE_CONFIG" == "yes" ]; then
             save_configuration
@@ -303,7 +303,10 @@ summary_and_confirm() {
         
         echo "Installation aborted by user."
         exit 1
+    else
+        configuration
     fi
+
 }
 
 save_configuration() {
