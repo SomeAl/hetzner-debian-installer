@@ -145,37 +145,65 @@ configure_partitioning() {
 
 configure_debian_install() {
     echo "[Configuring] Debian installation parameters..."
+    
+    # Проверка прав (не запущен ли скрипт без root)
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "Error: This script must be run as root!" >&2
+        exit 1
+    fi
 
-    # Prompt for Debian version; default is "stable"
+    # Выбор версии Debian
     read -rp "Select Debian version (stable, testing, sid) [stable]: " DEBIAN_RELEASE
     DEBIAN_RELEASE="${DEBIAN_RELEASE:-stable}"
     case "$DEBIAN_RELEASE" in
-        stable|testing|sid)
-            ;;  
-        *)
+        stable|testing|sid) ;;
+        *)  
             echo "Invalid Debian version input, defaulting to 'stable'."
             DEBIAN_RELEASE="stable"
             ;;
     esac
 
-    # Prompt for Debian repository mirror; default is http://ftp.de.debian.org/debian/
-    read -rp "Enter Debian repository mirror [http://ftp.de.debian.org/debian/]: " DEBIAN_MIRROR
-    DEBIAN_MIRROR="${DEBIAN_MIRROR:-http://ftp.de.debian.org/debian/}"
-    # Validate mirror availability with a simple HTTP HEAD request
-    if ! curl -Is "$DEBIAN_MIRROR" --max-time 5 | head -n 1 | grep -q "200"; then 
-        echo "Error: Debian mirror '$DEBIAN_MIRROR' is not reachable. Exiting."
+    # Ввод зеркала Debian
+    read -rp "Enter Debian repository mirror [http://deb.debian.org/debian/]: " DEBIAN_MIRROR
+    DEBIAN_MIRROR="${DEBIAN_MIRROR:-http://deb.debian.org/debian/}"
+
+    # Проверка доступности репозитория (более надежный метод)
+    if ! wget --spider -q "$DEBIAN_MIRROR/dists/$DEBIAN_RELEASE/Release"; then
+        echo "Error: Debian mirror '$DEBIAN_MIRROR' is not reachable. Exiting." >&2
         exit 1
     fi
 
-    read -rp "Enter installation target mount point for boot [/mnt/md0p1]: " INSTALL_TARGET
-    INSTALL_TARGET_BOOT="${INSTALL_TARGET_BOOT:-/mnt/md0p1}"
-    
-    read -rp "Enter installation target mount point for swap [/mnt/md0p2]: " INSTALL_TARGET
-    INSTALL_TARGET_SWAP="${INSTALL_TARGET_SWAP:-/mnt/md0p1}"
-    
-    read -rp "Enter installation target mount point for / [/mnt/md0p3]: " INSTALL_TARGET
-    INSTALL_TARGET_ROOT="${INSTALL_TARGET_ROOT:-/mnt/md0p1}"
+    # Массив точек монтирования
+    declare -A MOUNT_POINTS=(
+        ["BOOT"]="/mnt/md0p1"
+        ["SWAP"]="/mnt/md0p2"
+        ["ROOT"]="/mnt/md0p3"
+    )
+
+    # Функция проверки и создания путей
+    validate_mount_point() {
+        local mount_point=$1
+        if [ -z "$mount_point" ]; then
+            echo "Error: Mount point cannot be empty. Exiting." >&2
+            exit 1
+        fi
+
+        if [ ! -d "$mount_point" ]; then
+            echo "Warning: Mount point '$mount_point' does not exist. Creating it..."
+            mkdir -p "$mount_point" || { echo "Error: Failed to create $mount_point. Exiting."; exit 1; }
+            echo "Successfully created: $mount_point"
+        fi
+    }
+
+    # Запрос у пользователя и проверка точек монтирования
+    for key in "${!MOUNT_POINTS[@]}"; do
+        read -rp "Enter installation target mount point for ${key} [${MOUNT_POINTS[$key]}]: " user_input
+        MOUNT_POINTS[$key]="${user_input:-${MOUNT_POINTS[$key]}}"
+        validate_mount_point "${MOUNT_POINTS[$key]}"
+    done
+
 }
+
 
 configure_network() {
     echo "[Configuring] Network parameters"
