@@ -188,7 +188,7 @@ configure_debian_install() {
 
     # Массив точек монтирования
     declare -A MOUNT_POINTS=(
-        ["BOOT"]="/mnt/md0p2"
+        ["BOOT"]="/mnt/md0p1"
         ["SWAP"]="/mnt/md0p2"
         ["ROOT"]="/mnt/md0p3"
     )
@@ -382,7 +382,7 @@ summary_and_confirm() {
     echo "GRUB targets:          ${GRUB_TARGET_DRIVES[*]}"
     echo "Hostname:              $HOSTNAME"
     echo "----------------------------------------"
-    read -rp "Start installation with these settings? (yes/no)[no]: " CONFIRM
+    read -rp "Start installation with these settings? (yes/no)[no]: " ${CONFIRM:-no}
     if [ "$CONFIRM" == "yes" ]; then
         read -rp "Do you want to save the configuration? (yes/no) [yes]: " ${SAVE_CONFIG:-yes}
         if [ "$SAVE_CONFIG" == "yes" ]; then
