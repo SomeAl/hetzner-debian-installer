@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 exec 3>&1 4>&2  
 
 # Весь stdout и stderr пишем в лог, но скрываем отладку в консоли
@@ -315,10 +316,7 @@ run_debian_install() {
     # Проверка и монтирование ROOT-раздела
     if ! mountpoint -q "${MOUNT_POINTS[ROOT]}"; then
         echo "Mounting root partition (/dev/md0p3) to ${MOUNT_POINTS[ROOT]}..."
-        mount "/dev/md0p3" "${MOUNT_POINTS[ROOT]}" || {
-            echo "Error: Failed to mount root partition on ${MOUNT_POINTS[ROOT]}. Exiting."
-            exit 1
-        }
+        mount "/dev/md0p3" "${MOUNT_POINTS[ROOT]}"
     else
         echo "Warning: ${MOUNT_POINTS[ROOT]} is already mounted."
     fi
@@ -327,10 +325,7 @@ run_debian_install() {
     if [ -n "${MOUNT_POINTS[BOOT]}" ] && [ -d "${MOUNT_POINTS[BOOT]}" ]; then
         if ! mountpoint -q "${MOUNT_POINTS[BOOT]}"; then
             echo "Mounting boot partition (/dev/md0p1) to ${MOUNT_POINTS[BOOT]}..."
-            mount "/dev/md0p1" "${MOUNT_POINTS[BOOT]}" || {
-                echo "Error: Failed to mount boot partition. Exiting."
-                exit 1
-            }
+            mount "/dev/md0p1" "${MOUNT_POINTS[BOOT]}"
         else
             echo "Warning: ${MOUNT_POINTS[BOOT]} is already mounted."
         fi
@@ -340,10 +335,7 @@ run_debian_install() {
     if [ -n "${MOUNT_POINTS[SWAP]}" ] && [ -d "${MOUNT_POINTS[SWAP]}" ]; then
         if ! swapon --show | grep -q "${MOUNT_POINTS[SWAP]}"; then
             echo "Activating swap partition (/dev/md0p2..."
-            swapon "/dev/md0p2" || {
-                echo "Error: Failed to activate swap partition. Exiting."
-                exit 1
-            }
+            swapon "/dev/md0p2" 
         else
             echo "Warning: Swap partition is already active."
         fi
