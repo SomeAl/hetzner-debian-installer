@@ -376,10 +376,11 @@ summary_and_confirm() {
             save_configuration
         fi
         
+    elif [ "$CONFIRM" == "no" ];then
+        configuration
+    else
         echo "Installation aborted by user."
         exit 1
-    else
-        configuration
     fi
 
 }
