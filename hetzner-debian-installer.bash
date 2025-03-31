@@ -282,40 +282,71 @@ run_partitioning() {
 run_debian_install() {
     echo "[Running] Installing Debian base system with debootstrap..."
 
-    # Ensure the installation target exists; create if necessary.
-    if [ ! -d "$INSTALL_TARGET" ]; then
-        echo "Target mount point $INSTALL_TARGET does not exist. Creating it..."
-        mkdir -p "$INSTALL_TARGET"
+    # Проверка прав root
+    if [ "$(id -u)" -ne 0 ]; then
+        echo "Error: This script must be run as root!" >&2
+        exit 1
     fi
 
-    # Check if the target is already mounted.
-    if mountpoint -q "$INSTALL_TARGET"; then
-        echo "Warning: $INSTALL_TARGET is already mounted."
-    else
-        echo "Mounting target partition(s) to $INSTALL_TARGET..."
-        # Mount the root partition; adjust partition identifier if necessary.
-        mount "${PART_DRIVE1}p3" "$INSTALL_TARGET" || {
-            echo "Error: Failed to mount root partition on $INSTALL_TARGET. Exiting."
+    # Проверка наличия пути установки
+    for key in "${!MOUNT_POINTS[@]}"; do
+        if [ ! -d "${MOUNT_POINTS[$key]}" ]; then
+            echo "Creating mount point: ${MOUNT_POINTS[$key]}..."
+            mkdir -p "${MOUNT_POINTS[$key]}" || {
+                echo "Error: Failed to create ${MOUNT_POINTS[$key]}. Exiting."
+                exit 1
+            }
+        fi
+    done
+
+    # Проверка и монтирование ROOT-раздела
+    if ! mountpoint -q "${MOUNT_POINTS[ROOT]}"; then
+        echo "Mounting root partition (${PART_DRIVE1}p3) to ${MOUNT_POINTS[ROOT]}..."
+        mount "${PART_DRIVE1}p3" "${MOUNT_POINTS[ROOT]}" || {
+            echo "Error: Failed to mount root partition on ${MOUNT_POINTS[ROOT]}. Exiting."
             exit 1
         }
-        # Optionally, mount /boot if separate; uncomment if applicable.
-        # mkdir -p "$INSTALL_TARGET/boot"
-        # mount "${PART_DRIVE1}p1" "$INSTALL_TARGET/boot" || {
-        #     echo "Error: Failed to mount /boot partition. Exiting."
-        #     exit 1
-        # }
+    else
+        echo "Warning: ${MOUNT_POINTS[ROOT]} is already mounted."
     fi
 
-    # Run debootstrap to install the Debian base system.
+    # Проверка и монтирование BOOT-раздела (если задан)
+    if [ -n "${MOUNT_POINTS[BOOT]}" ] && [ -d "${MOUNT_POINTS[BOOT]}" ]; then
+        if ! mountpoint -q "${MOUNT_POINTS[BOOT]}"; then
+            echo "Mounting boot partition (${PART_DRIVE1}p1) to ${MOUNT_POINTS[BOOT]}..."
+            mount "${PART_DRIVE1}p1" "${MOUNT_POINTS[BOOT]}" || {
+                echo "Error: Failed to mount boot partition. Exiting."
+                exit 1
+            }
+        else
+            echo "Warning: ${MOUNT_POINTS[BOOT]} is already mounted."
+        fi
+    fi
+
+    # Монтирование SWAP-раздела (если указан)
+    if [ -n "${MOUNT_POINTS[SWAP]}" ] && [ -d "${MOUNT_POINTS[SWAP]}" ]; then
+        if ! swapon --show | grep -q "${MOUNT_POINTS[SWAP]}"; then
+            echo "Activating swap partition (${PART_DRIVE1}p2)..."
+            swapon "${PART_DRIVE1}p2" || {
+                echo "Error: Failed to activate swap partition. Exiting."
+                exit 1
+            }
+        else
+            echo "Warning: Swap partition is already active."
+        fi
+    fi
+
+    # Запуск debootstrap
     echo "Starting debootstrap for Debian $DEBIAN_RELEASE using mirror $DEBIAN_MIRROR..."
-    debootstrap --arch=amd64 "$DEBIAN_RELEASE" "$INSTALL_TARGET" "$DEBIAN_MIRROR"
+    debootstrap --arch=amd64 "$DEBIAN_RELEASE" "${MOUNT_POINTS[ROOT]}" "$DEBIAN_MIRROR"
     if [ $? -ne 0 ]; then
         echo "Error: debootstrap failed. Exiting."
         exit 1
     fi
 
-    echo "Debian base system installed successfully in $INSTALL_TARGET."
+    echo "Debian base system installed successfully in ${MOUNT_POINTS[ROOT]}."
 }
+
 
 run_network() { echo "[Running] Network setup..."; }
 run_bootloader() { echo "[Running] Bootloader installation..."; }
