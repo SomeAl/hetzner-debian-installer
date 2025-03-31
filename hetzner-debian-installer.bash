@@ -296,11 +296,12 @@ summary_and_confirm() {
     echo "----------------------------------------"
     read -rp "Start installation with these settings? (yes/no): " CONFIRM
     if [ "$CONFIRM" != "yes" ]; then
-        echo "Installation aborted by user."
         read -rp "Do you want to save the configuration? (yes/no): " SAVE_CONFIG
         if [ "$SAVE_CONFIG" == "yes" ]; then
             save_configuration
         fi
+        
+        echo "Installation aborted by user."
         exit 1
     fi
 }
