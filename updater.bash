@@ -28,7 +28,7 @@ update_repo() {
         git pull --force "$GIT_REMOTE" "$BRANCH"
 
         echo "Обновление завершено."
-        chmod +x `${$REPO_DIR}*`
+        chmod +x `${REPO_DIR}*`
     else
         echo "Нет новых изменений."
     fi
