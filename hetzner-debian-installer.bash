@@ -1,11 +1,16 @@
 #!/bin/bash
 exec 3>&1 4>&2  
+<<<<<<< HEAD
 
 # Весь stdout и stderr пишем в лог, но скрываем отладку в консоли
 exec > >(tee -a hetzner-debian-installer.log) 2> >(tee -a hetzner-debian-installer.log >&4)  
 
 # Включаем отладочный режим ТОЛЬКО в логах
 (set -x; exec 2> >(tee -a hetzner-debian-installer.log >&4))
+=======
+exec > >(tee -a hetzner-debian-installer.log) 2> >(tee -a hetzner-debian-installer.log >&2)  
+set -xe
+>>>>>>> 0fe836a43a205abdcb148fb0cd2d0bd11ff8a98d
 
 log() {
     echo "[INFO] $@" | tee /dev/fd/3
@@ -15,7 +20,10 @@ log_error() {
     echo "[ERROR] $@" | tee /dev/fd/3 >&2
 }
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 0fe836a43a205abdcb148fb0cd2d0bd11ff8a98d
 
 CONFIG_FILE="hetzner-debian-installer.conf"
 SESSION_NAME="debian_install"
