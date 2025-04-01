@@ -19,6 +19,8 @@ log_error() {
 
 CONFIG_FILE="hetzner-debian-installer.conf"
 SESSION_NAME="debian_install"
+# Массив точек монтирования
+declare -A MOUNT_POINTS
 
 # Load config file if exists
 if [ -f "$CONFIG_FILE" ]; then
@@ -188,11 +190,9 @@ configure_debian_install() {
     fi
 
     # Массив точек монтирования
-    declare -A MOUNT_POINTS=(
-        ["BOOT"]="/mnt/md0p1"
-        ["SWAP"]="/mnt/md0p2"
-        ["ROOT"]="/mnt/md0p3"
-    )
+    MOUNT_POINTS["BOOT"]="/mnt/md0p1"
+    MOUNT_POINTS["SWAP"]="/mnt/md0p2"
+    MOUNT_POINTS["ROOT"]="/mnt/md0p3"
 
     # Функция проверки и создания путей
     validate_mount_point() {
