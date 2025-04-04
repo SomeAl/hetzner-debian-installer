@@ -503,7 +503,7 @@ save_configuration() {
 configuring() {
     configure_partitioning
     configure_debian_install
-    #configure_network
+    configure_network
     #configure_bootloader
     #configure_initial_config
     #configure_cleanup
