@@ -28,7 +28,17 @@ screen -S "$STY" -X sessionname "$SESSION_NAME"
 
 
 ################################################################################################################################################
+################################################################################################################################################
 ### HELPER FUNCTIONS ###
+
+# функции логирования
+log() {
+    echo "[INFO] $@" | tee /dev/fd/3
+}
+
+log_error() {
+    echo "[ERROR] $@" | tee /dev/fd/3 >&2
+}
 
 # функции логирования
 log() {
@@ -49,6 +59,37 @@ validate_size() {
         return 0
     else
         return 1
+    fi
+}
+
+# Функция проверки и создания путей
+validate_mount_point() {
+    local mount_point=$1
+    if [ -z "$mount_point" ]; then
+        echo "Error: Mount point cannot be empty. Exiting." >&2
+        exit 1
+    fi
+
+    if [ ! -d "$mount_point" ]; then
+        echo "Warning: Mount point '$mount_point' does not exist. Creating it..."
+        mkdir -p "$mount_point" || { echo "Error: Failed to create $mount_point. Exiting."; exit 1; }
+        echo "Successfully created: $mount_point"
+    fi
+}
+
+# Функция проверки монтирования и размонтирования
+ensure_unmounted() {
+    local mount_point=$1
+    if findmnt -r "$mount_point" >/dev/null 2>&1; then
+        echo "Warning: $mount_point is currently mounted."
+        read -rp "Do you want to unmount it? (y/N): " confirm
+        if [[ "$confirm" =~ ^[Yy]$ ]]; then
+            umount -l "$mount_point" || { echo "Error: Failed to unmount $mount_point. Exiting."; exit 1; }
+            echo "Unmounted: $mount_point"
+        else
+            echo "Error: Installation cannot proceed with mounted target. Exiting."
+            exit 1
+        fi
     fi
 }
 
