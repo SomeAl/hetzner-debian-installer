@@ -22,14 +22,6 @@ SESSION_NAME="debian_install"
 # Массив точек монтирования
 declare -A MOUNT_POINTS
 
-# Load config file if exists
-if [ -f "$CONFIG_FILE" ]; then
-    echo "Loading configuration from $CONFIG_FILE"
-    source "$CONFIG_FILE"
-else
-    echo "No configuration file found, proceeding interactively."
-fi
-
 # Auto-start inside screen session
 if [ -z "$STY" ]; then
     if ! command -v screen &>/dev/null; then
@@ -592,6 +584,15 @@ save_configuration() {
     echo ""
 }
 
+# Load config file if exists
+if [ -f "$CONFIG_FILE" ]; then
+    echo "Loading configuration from $CONFIG_FILE"
+    source "$CONFIG_FILE"
+    summary_and_confirm
+    running
+else
+    echo "No configuration file found, proceeding interactively."
+fi
 
 ### Entrypoints ###
 configuring() {
