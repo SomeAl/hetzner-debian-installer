@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 exec 3>&1 4>&2  
 
 # Весь stdout и stderr пишем в лог, но скрываем отладку в консоли
@@ -234,52 +234,126 @@ configure_debian_install() {
     done
 }
 
-
 configure_network() {
-    local use_dhcp ip netmask gateway dns confirm
+    echo "[Configuring] Network settings..."
 
-    echo "Use DHCP? (yes/no) [yes]: "
-    read use_dhcp
-    use_dhcp=${use_dhcp,,}  # Приведение к нижнему регистру
-    [[ -z "$use_dhcp" ]] && use_dhcp="yes"
+    # Получаем список активных интерфейсов (кроме lo)
+    AVAILABLE_IFACES=($(ip -o link show up | awk -F': ' '{print $2}' | grep -v lo))
 
-    if [[ "$use_dhcp" != "yes" && "$use_dhcp" != "no" ]]; then
-        echo "Ошибка: введите 'yes' или 'no'."
-        return 1
+    if [[ ${#AVAILABLE_IFACES[@]} -eq 0 ]]; then
+        echo "Error: No active network interfaces found." >&2
+        exit 1
+    elif [[ ${#AVAILABLE_IFACES[@]} -eq 1 ]]; then
+        NET_IFACE="${AVAILABLE_IFACES[0]}"
+        echo "Only one active interface detected: ${NET_IFACE}. Using it automatically."
+    else
+        echo "Available network interfaces:"
+        printf " - %s\n" "${AVAILABLE_IFACES[@]}"
+        read -rp "Enter network interface to configure [${AVAILABLE_IFACES[0]}]: " NET_IFACE
+        NET_IFACE="${NET_IFACE:-${AVAILABLE_IFACES[0]}}"
     fi
 
-    if [[ "$use_dhcp" == "no" ]]; then
+    # Проверка существования интерфейса
+    if ! ip link show "$NET_IFACE" &>/dev/null; then
+        echo "Error: Network interface '$NET_IFACE' not found. Exiting." >&2
+        exit 1
+    fi
+
+    # DHCP или Static
+    read -rp "Use DHCP? (yes/no) [yes]: " NETWORK_USE_DHCP
+    NETWORK_USE_DHCP="${NETWORK_USE_DHCP,,}"  # в нижний регистр
+    NETWORK_USE_DHCP="${NETWORK_USE_DHCP:-yes}"
+
+    if [[ "$NETWORK_USE_DHCP" == "yes" ]]; then
+        echo "Using DHCP configuration for interface '$NET_IFACE'."
+
+        # Проверка, работает ли DHCP на интерфейсе
+        echo "Testing DHCP availability on $NET_IFACE..."
+        if command -v dhclient &>/dev/null; then
+            dhclient -1 -v "$NET_IFACE" &>/dev/null
+            if [ $? -ne 0 ]; then
+                echo "Warning: Failed to obtain DHCP lease on '$NET_IFACE'."
+                read -rp "Continue anyway? (y/N): " confirm
+                [[ "$confirm" =~ ^[Yy]$ ]] || exit 1
+            else
+                echo "DHCP lease successfully acquired."
+            fi
+        else
+            echo "Warning: dhclient not installed, skipping DHCP lease test."
+        fi
+
+        # Очистка переменных статической конфигурации
+        NETWORK_IP=""
+        NETWORK_MASK=""
+        NETWORK_GATEWAY=""
+        NETWORK_DNS=""
+    else
+        # 1. IP
         while true; do
-            echo "Enter static IP (leave empty for DHCP): "
-            read ip
-            [[ -z "$ip" ]] && { echo "IP обязателен для статической конфигурации"; continue; }
-            if ! [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
-                echo "Ошибка: некорректный IP-адрес."
+            read -rp "Enter static IP address (e.g., 192.168.1.100): " ip
+            [[ -z "$ip" ]] && echo "Error: IP address is required." && continue
+
+            if ! ipcalc "$ip" &>/dev/null && ! ip addr add "$ip"/32 dev "$NET_IFACE" &>/dev/null; then
+                echo "Error: Invalid IP format."
                 continue
+            fi
+
+            # Проверка занятости IP
+            if command -v arping &>/dev/null; then
+                if arping -D -I "$NET_IFACE" "$ip" -c 2 &>/dev/null; then
+                    echo "Warning: IP address $ip is already in use."
+                    read -rp "Continue anyway? (y/N): " confirm
+                    [[ ! "$confirm" =~ ^[Yy]$ ]] && continue
+                fi
             fi
             break
         done
 
-        echo "Enter netmask (e.g., 255.255.255.0) [255.255.255.0]: "
-        read netmask
-        [[ -z "$netmask" ]] && netmask="255.255.255.0"
+        # 2. Маска
+        read -rp "Enter netmask or CIDR (e.g., 255.255.255.0 or /24) [255.255.255.0]: " netmask
+        netmask="${netmask:-255.255.255.0}"
+        if [[ "$netmask" =~ ^/[0-9]{1,2}$ ]]; then
+            cidr="${netmask#/}"
+            if command -v ipcalc &>/dev/null; then
+                netmask=$(ipcalc -m "$ip/$cidr" | awk -F'= ' '/Netmask/ {print $2}')
+            else
+                echo "Warning: ipcalc not available to convert CIDR to netmask. Using default: $netmask"
+                netmask="255.255.255.0"
+            fi
+        fi
 
-        echo "Enter gateway (e.g., 192.168.1.1): "
-        read gateway
-        [[ -z "$gateway" ]] && { echo "Шлюз обязателен для статической конфигурации"; return 1; }
+        # 3. Gateway
+        while true; do
+            read -rp "Enter gateway (e.g., 192.168.1.1): " gateway
+            [[ -z "$gateway" ]] && echo "Error: Gateway is required." && continue
 
-        echo "Enter DNS servers (space-separated) [8.8.8.8 1.1.1.1]: "
-        read dns
-        [[ -z "$dns" ]] && dns="8.8.8.8 1.1.1.1"
+            if [[ "$gateway" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+                # Проверка пинга
+                if ping -c 1 -W 1 "$gateway" &>/dev/null; then
+                    break
+                else
+                    echo "Warning: Gateway $gateway is not responding to ping."
+                    read -rp "Continue anyway? (y/N): " confirm
+                    [[ "$confirm" =~ ^[Yy]$ ]] && break
+                fi
+            else
+                echo "Invalid gateway format."
+            fi
+        done
+
+        # 4. DNS
+        read -rp "Enter DNS servers (space-separated) [8.8.8.8 1.1.1.1]: " dns
+        dns="${dns:-8.8.8.8 1.1.1.1}"
     fi
 
     # Обновление переменных окружения
-    NETWORK_USE_DHCP="$use_dhcp"
+    NETWORK_INTERFACE="$NET_IFACE"
     NETWORK_IP="${ip:-""}"
     NETWORK_MASK="${netmask:-"255.255.255.0"}"
     NETWORK_GATEWAY="${gateway:-""}"
     NETWORK_DNS="${dns:-"8.8.8.8 1.1.1.1"}"
 }
+
 
 configure_bootloader() {
     echo "[Configuring] Bootloader parameters"
