@@ -536,9 +536,17 @@ summary_and_confirm() {
         if [ "$SAVE_CONFIG" == "yes" ]; then
             save_configuration
         fi
-        
     elif [ "$CONFIRM" == "no" ];then
-        configuring
+        clear
+        read -rp "Restart configuration? (yes/no) [yes]: " RESTART_CONFIGURATION
+        RESTART_CONFIGURATION="${RESTART_CONFIGURATION,,}"  # lower case
+        RESTART_CONFIGURATION="${RESTART_CONFIGURATION:-yes}"
+        if [ "$RESTART_CONFIGURATION" == "yes" ];then 
+            configuring
+        else
+            echo "Installation aborted by user."
+            exit 1
+        fi
     else
         echo "Installation aborted by user."
         exit 1
