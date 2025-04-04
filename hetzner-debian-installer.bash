@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -eo pipefail
 exec 3>&1 4>&2  
 
 # Весь stdout и stderr пишем в лог, но скрываем отладку в консоли
