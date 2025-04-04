@@ -1,5 +1,5 @@
 #disable swap
-swapoff /mnt/md0p2
+swapoff /dev/md0p2
 
 #clear dabain install step
 umount /mnt/md0p1
