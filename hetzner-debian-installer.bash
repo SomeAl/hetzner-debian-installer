@@ -467,36 +467,46 @@ run_debian_install() {
     echo "Debian base system installed successfully in ${MOUNT_POINTS[ROOT]}."
 }
 
-run_network() { 
-    run_network() {
-    local interfaces_file="/etc/network/interfaces"
+run_network() {
+    local config_file="/etc/network/interfaces"
+    local interface="eth0"
 
+    # Формируем конфигурацию в зависимости от режима
     if [[ "$NETWORK_USE_DHCP" == "yes" ]]; then
-        echo "Настройка сети через DHCP..."
-        printf "auto eth0" > $interfaces_file
-        printf "iface eth0 inet dhcp" > $interfaces_file
+        log "Configuring DHCP for $interface"
+        {
+            printf "auto %s\n" "$interface"
+            printf "iface %s inet dhcp\n" "$interface"
+        } > "$config_file"
     else
-        if [[ -z "$NETWORK_IP" || -z "$NETWORK_MASK" || -z "$NETWORK_GATEWAY" ]]; then
-            echo "Ошибка: неполная статическая конфигурация."
-            return 1
-        fi
-
-        echo "Настройка статического IP..."
-        $interfaces_file
-        "auto eth0"
-        "iface eth0 inet static"
-        "    address $NETWORK_IP"
-        "    netmask $NETWORK_MASK"
-        "    gateway $NETWORK_GATEWAY"
-        "    dns-nameservers $NETWORK_DNS"
+        log "Configuring static IP: $NETWORK_IP/$NETWORK_MASK"
+        {
+            printf "auto %s\n" "$interface"
+            printf "iface %s inet static\n" "$interface"
+            printf "    address %s\n" "$NETWORK_IP"
+            printf "    netmask %s\n" "$NETWORK_MASK"
+            printf "    gateway %s\n" "$NETWORK_GATEWAY"
+            printf "    dns-nameservers %s\n" "$NETWORK_DNS"
+        } > "$config_file"
     fi
 
-    # Перезапуск сети
-    systemctl restart networking
-    echo "Сетевые настройки применены."
-}
+    # Применяем конфигурацию
+    log "Restarting networking service..."
+    if systemctl restart networking; then
+        log "Network configuration applied successfully"
+    else
+        log_error "Failed to apply network configuration"
+        return 1
+    fi
 
- }
+    # Проверяем статус сети
+    if systemctl is-active --quiet networking; then
+        log "Networking service is active"
+    else
+        log_error "Networking service failed to start"
+        return 1
+    fi
+}
 
 run_bootloader() { echo "[Running] Bootloader installation..."; }
 run_initial_config() { echo "[Running] Initial configuration..."; }
