@@ -26,6 +26,8 @@ declare -A MOUNT_POINTS
 if [ -f "$CONFIG_FILE" ]; then
     echo "Loading configuration from $CONFIG_FILE"
     source "$CONFIG_FILE"
+    summary_and_confirm
+    running
 else
     echo "No configuration file found, proceeding interactively."
 fi
