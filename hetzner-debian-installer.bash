@@ -1,20 +1,10 @@
 #!/bin/bash
 set -eo pipefail
 exec 3>&1 4>&2  
-
 # Весь stdout и stderr пишем в лог, но скрываем отладку в консоли
 exec > >(tee -a hetzner-debian-installer.log) 2> >(tee -a hetzner-debian-installer.log >&4)  
-
 # Включаем отладочный режим ТОЛЬКО в логах
 (set -x; exec 2> >(tee -a hetzner-debian-installer.log >&4))
-
-log() {
-    echo "[INFO] $@" | tee /dev/fd/3
-}
-
-log_error() {
-    echo "[ERROR] $@" | tee /dev/fd/3 >&2
-}
 
 
 CONFIG_FILE="hetzner-debian-installer.conf"
@@ -37,7 +27,17 @@ fi
 screen -S "$STY" -X sessionname "$SESSION_NAME"
 
 
+################################################################################################################################################
 ### HELPER FUNCTIONS ###
+
+# функции логирования
+log() {
+    echo "[INFO] $@" | tee /dev/fd/3
+}
+
+log_error() {
+    echo "[ERROR] $@" | tee /dev/fd/3 >&2
+}
 
 find_disks() {
     lsblk -dpno NAME,TYPE | awk '$2 == "disk" {print $1}'
@@ -49,6 +49,37 @@ validate_size() {
         return 0
     else
         return 1
+    fi
+}
+
+# Функция проверки и создания путей
+validate_mount_point() {
+    local mount_point=$1
+    if [ -z "$mount_point" ]; then
+        echo "Error: Mount point cannot be empty. Exiting." >&2
+        exit 1
+    fi
+
+    if [ ! -d "$mount_point" ]; then
+        echo "Warning: Mount point '$mount_point' does not exist. Creating it..."
+        mkdir -p "$mount_point" || { echo "Error: Failed to create $mount_point. Exiting."; exit 1; }
+        echo "Successfully created: $mount_point"
+    fi
+}
+
+# Функция проверки монтирования и размонтирования
+ensure_unmounted() {
+    local mount_point=$1
+    if findmnt -r "$mount_point" >/dev/null 2>&1; then
+        echo "Warning: $mount_point is currently mounted."
+        read -rp "Do you want to unmount it? (y/N): " confirm
+        if [[ "$confirm" =~ ^[Yy]$ ]]; then
+            umount -l "$mount_point" || { echo "Error: Failed to unmount $mount_point. Exiting."; exit 1; }
+            echo "Unmounted: $mount_point"
+        else
+            echo "Error: Installation cannot proceed with mounted target. Exiting."
+            exit 1
+        fi
     fi
 }
 
@@ -187,43 +218,12 @@ configure_debian_install() {
     MOUNT_POINTS["SWAP"]="/mnt/md0p2"
     MOUNT_POINTS["ROOT"]="/mnt/md0p3"
 
-    # Функция проверки и создания путей
-    validate_mount_point() {
-        local mount_point=$1
-        if [ -z "$mount_point" ]; then
-            echo "Error: Mount point cannot be empty. Exiting." >&2
-            exit 1
-        fi
-
-        if [ ! -d "$mount_point" ]; then
-            echo "Warning: Mount point '$mount_point' does not exist. Creating it..."
-            mkdir -p "$mount_point" || { echo "Error: Failed to create $mount_point. Exiting."; exit 1; }
-            echo "Successfully created: $mount_point"
-        fi
-    }
-
-    # Функция проверки монтирования и размонтирования
-    ensure_unmounted() {
-        local mount_point=$1
-        if findmnt -r "$mount_point" >/dev/null 2>&1; then
-            echo "Warning: $mount_point is currently mounted."
-            read -rp "Do you want to unmount it? (y/N): " confirm
-            if [[ "$confirm" =~ ^[Yy]$ ]]; then
-                umount -l "$mount_point" || { echo "Error: Failed to unmount $mount_point. Exiting."; exit 1; }
-                echo "Unmounted: $mount_point"
-            else
-                echo "Error: Installation cannot proceed with mounted target. Exiting."
-                exit 1
-            fi
-        fi
-    }
 
     # Запрос у пользователя и проверка точек монтирования
     for key in "${!MOUNT_POINTS[@]}"; do
         read -rp "Enter installation target mount point for ${key} [${MOUNT_POINTS[$key]}]: " user_input
         MOUNT_POINTS[$key]="${user_input:-${MOUNT_POINTS[$key]}}"
         ensure_unmounted "${MOUNT_POINTS[$key]}"
-        validate_mount_point "${MOUNT_POINTS[$key]}"
     done
 }
 
@@ -423,6 +423,7 @@ run_debian_install() {
 
     # Проверка и монтирование ROOT-раздела
     if ! mountpoint -q "${MOUNT_POINTS[ROOT]}"; then
+        validate_mount_point "${MOUNT_POINTS[ROOT]}"
         echo "Mounting root partition (/dev/md0p3) to ${MOUNT_POINTS[ROOT]}..."
         mount "/dev/md0p3" "${MOUNT_POINTS[ROOT]}"
     else
@@ -432,6 +433,7 @@ run_debian_install() {
     # Проверка и монтирование BOOT-раздела (если задан)
     if [ -n "${MOUNT_POINTS[BOOT]}" ] && [ -d "${MOUNT_POINTS[BOOT]}" ]; then
         if ! mountpoint -q "${MOUNT_POINTS[BOOT]}"; then
+            validate_mount_point "${MOUNT_POINTS[BOOT]}"
             echo "Mounting boot partition (/dev/md0p1) to ${MOUNT_POINTS[BOOT]}..."
             mount "/dev/md0p1" "${MOUNT_POINTS[BOOT]}"
         else
@@ -442,6 +444,7 @@ run_debian_install() {
     # Монтирование SWAP-раздела (если указан)
     if [ -n "${MOUNT_POINTS[SWAP]}" ] && [ -d "${MOUNT_POINTS[SWAP]}" ]; then
         if ! swapon --show | grep -q "${MOUNT_POINTS[SWAP]}"; then
+            validate_mount_point "${MOUNT_POINTS[SWAP]}"
             echo "Activating swap partition (/dev/md0p2..."
             swapon "/dev/md0p2" 
         else
