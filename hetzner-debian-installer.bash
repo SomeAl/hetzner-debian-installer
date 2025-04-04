@@ -462,7 +462,7 @@ run_debian_install() {
 
     # Проверка и монтирование ROOT-раздела
     if ! mountpoint -q "${MOUNT_POINTS[ROOT]}"; then
-        validate_mount_point $MOUNT_POINTS[ROOT]
+        validate_mount_point "${MOUNT_POINTS[ROOT]}"
         echo "Mounting root partition (/dev/md0p3) to ${MOUNT_POINTS[ROOT]}..."
         mount "/dev/md0p3" "${MOUNT_POINTS[ROOT]}"
     else
@@ -472,7 +472,7 @@ run_debian_install() {
     # Проверка и монтирование BOOT-раздела (если задан)
     if [ -n "${MOUNT_POINTS[BOOT]}" ] && [ -d "${MOUNT_POINTS[BOOT]}" ]; then
         if ! mountpoint -q "${MOUNT_POINTS[BOOT]}"; then
-            validate_mount_point "$MOUNT_POINTS[BOOT]}"
+            validate_mount_point "${MOUNT_POINTS[BOOT]}"
             echo "Mounting boot partition (/dev/md0p1) to ${MOUNT_POINTS[BOOT]}..."
             mount "/dev/md0p1" "${MOUNT_POINTS[BOOT]}"
         else
@@ -483,7 +483,7 @@ run_debian_install() {
     # Монтирование SWAP-раздела (если указан)
     if [ -n "${MOUNT_POINTS[SWAP]}" ] && [ -d "${MOUNT_POINTS[SWAP]}" ]; then
         if ! swapon --show | grep -q "${MOUNT_POINTS[SWAP]}"; then
-            validate_mount_point "$MOUNT_POINTS[SWAP]"
+            validate_mount_point "${MOUNT_POINTS[SWAP]}"
             echo "Activating swap partition (/dev/md0p2..."
             swapon "/dev/md0p2" 
         else
