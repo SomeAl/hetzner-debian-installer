@@ -354,7 +354,6 @@ configure_network() {
     NETWORK_DNS="${dns:-"8.8.8.8 1.1.1.1"}"
 }
 
-
 configure_bootloader() {
     echo "[Configuring] Bootloader parameters"
     if [ -z "${GRUB_TARGET_DRIVES[*]}" ]; then
@@ -469,20 +468,19 @@ run_debian_install() {
 
 run_network() {
     local config_file="/etc/network/interfaces"
-    local interface="eth0"
 
     # Формируем конфигурацию в зависимости от режима
     if [[ "$NETWORK_USE_DHCP" == "yes" ]]; then
-        log "Configuring DHCP for $interface"
+        log "Configuring DHCP for $NETWORK_INTERFACE"
         {
-            printf "auto %s\n" "$interface"
-            printf "iface %s inet dhcp\n" "$interface"
+            printf "auto %s\n" "$NETWORK_INTERFACE"
+            printf "iface %s inet dhcp\n" "$NETWORK_INTERFACE"
         } > "$config_file"
     else
         log "Configuring static IP: $NETWORK_IP/$NETWORK_MASK"
         {
-            printf "auto %s\n" "$interface"
-            printf "iface %s inet static\n" "$interface"
+            printf "auto %s\n" "$NETWORK_INTERFACE"
+            printf "iface %s inet static\n" "$NETWORK_INTERFACE"
             printf "    address %s\n" "$NETWORK_IP"
             printf "    netmask %s\n" "$NETWORK_MASK"
             printf "    gateway %s\n" "$NETWORK_GATEWAY"
@@ -536,9 +534,17 @@ summary_and_confirm() {
         if [ "$SAVE_CONFIG" == "yes" ]; then
             save_configuration
         fi
-        
     elif [ "$CONFIRM" == "no" ];then
-        configuring
+        clear
+        read -rp "Restart configuration? (yes/no) [yes]: " RESTART_CONFIGURATION
+        RESTART_CONFIGURATION="${RESTART_CONFIGURATION,,}"  # lower case
+        RESTART_CONFIGURATION="${RESTART_CONFIGURATION:-yes}"
+        if [ "$RESTART_CONFIGURATION" == "yes" ];then 
+            configuring
+        else
+            echo "Installation aborted by user."
+            exit 1
+        fi
     else
         echo "Installation aborted by user."
         exit 1
