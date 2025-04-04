@@ -236,8 +236,49 @@ configure_debian_install() {
 
 
 configure_network() {
-    echo "[Configuring] Network parameters"
-    : "${NETWORK_USE_DHCP:?$(read -rp 'Use DHCP? (yes/no): ' NETWORK_USE_DHCP)}"
+    local use_dhcp ip netmask gateway dns confirm
+
+    echo "Use DHCP? (yes/no) [yes]: "
+    read use_dhcp
+    use_dhcp=${use_dhcp,,}  # Приведение к нижнему регистру
+    [[ -z "$use_dhcp" ]] && use_dhcp="yes"
+
+    if [[ "$use_dhcp" != "yes" && "$use_dhcp" != "no" ]]; then
+        echo "Ошибка: введите 'yes' или 'no'."
+        return 1
+    fi
+
+    if [[ "$use_dhcp" == "no" ]]; then
+        while true; do
+            echo "Enter static IP (leave empty for DHCP): "
+            read ip
+            [[ -z "$ip" ]] && { echo "IP обязателен для статической конфигурации"; continue; }
+            if ! [[ "$ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+                echo "Ошибка: некорректный IP-адрес."
+                continue
+            fi
+            break
+        done
+
+        echo "Enter netmask (e.g., 255.255.255.0) [255.255.255.0]: "
+        read netmask
+        [[ -z "$netmask" ]] && netmask="255.255.255.0"
+
+        echo "Enter gateway (e.g., 192.168.1.1): "
+        read gateway
+        [[ -z "$gateway" ]] && { echo "Шлюз обязателен для статической конфигурации"; return 1; }
+
+        echo "Enter DNS servers (space-separated) [8.8.8.8 1.1.1.1]: "
+        read dns
+        [[ -z "$dns" ]] && dns="8.8.8.8 1.1.1.1"
+    fi
+
+    # Обновление переменных окружения
+    NETWORK_USE_DHCP="$use_dhcp"
+    NETWORK_IP="${ip:-""}"
+    NETWORK_MASK="${netmask:-"255.255.255.0"}"
+    NETWORK_GATEWAY="${gateway:-""}"
+    NETWORK_DNS="${dns:-"8.8.8.8 1.1.1.1"}"
 }
 
 configure_bootloader() {
@@ -352,8 +393,37 @@ run_debian_install() {
     echo "Debian base system installed successfully in ${MOUNT_POINTS[ROOT]}."
 }
 
+run_network() { 
+    run_network() {
+    local interfaces_file="/etc/network/interfaces"
 
-run_network() { echo "[Running] Network setup..."; }
+    if [[ "$NETWORK_USE_DHCP" == "yes" ]]; then
+        echo "Настройка сети через DHCP..."
+        printf "auto eth0" > $interfaces_file
+        printf "iface eth0 inet dhcp" > $interfaces_file
+    else
+        if [[ -z "$NETWORK_IP" || -z "$NETWORK_MASK" || -z "$NETWORK_GATEWAY" ]]; then
+            echo "Ошибка: неполная статическая конфигурация."
+            return 1
+        fi
+
+        echo "Настройка статического IP..."
+        $interfaces_file
+        "auto eth0"
+        "iface eth0 inet static"
+        "    address $NETWORK_IP"
+        "    netmask $NETWORK_MASK"
+        "    gateway $NETWORK_GATEWAY"
+        "    dns-nameservers $NETWORK_DNS"
+    fi
+
+    # Перезапуск сети
+    systemctl restart networking
+    echo "Сетевые настройки применены."
+}
+
+ }
+
 run_bootloader() { echo "[Running] Bootloader installation..."; }
 run_initial_config() { echo "[Running] Initial configuration..."; }
 run_cleanup() { echo "[Running] Cleanup and reboot..."; }
@@ -412,6 +482,10 @@ save_configuration() {
         ""
         "# Network"
         "NETWORK_USE_DHCP=${NETWORK_USE_DHCP}"
+        "NETWORK_IP=${NETWORK_IP}"
+        "NETWORK_MASK=${NETWORK_MASK}"
+        "NETWORK_GATEWAY=${NETWORK_GATEWAY}"
+        "NETWORK_DNS=${NETWORK_DNS}"
         ""
         "# Bootloader"
         "GRUB_TARGET_DRIVES=${GRUB_TARGET_DRIVES[*]}"
@@ -423,6 +497,7 @@ save_configuration() {
     echo "Configuration saved to $CONFIG_FILE"
     echo ""
 }
+
 
 ### Entrypoints ###
 configuring() {
