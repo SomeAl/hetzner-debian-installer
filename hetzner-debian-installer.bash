@@ -494,6 +494,8 @@ run_network() {
         log "Network configuration applied successfully"
     else
         log_error "Failed to apply network configuration"
+        log_error "$(systemctl status networking.service)"
+        echo "$(journalctl -xeu networking.service)" >> ./networking.service.dmp
         return 1
     fi
 
