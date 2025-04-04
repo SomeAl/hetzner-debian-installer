@@ -60,6 +60,7 @@ validate_size() {
     fi
 }
 
+################################################################################################################################################
 ### CONFIGURE FUNCTIONS ###
 
 configure_partitioning() {
@@ -342,8 +343,8 @@ configure_network() {
         done
 
         # 4. DNS
-        read -rp "Enter DNS servers (space-separated) [8.8.8.8 1.1.1.1]: " dns
-        dns="${dns:-8.8.8.8 1.1.1.1}"
+        read -rp "Enter DNS servers (space-separated) [8.8.8.8]: " dns
+        dns="${dns:-8.8.8.8}"
     fi
 
     # Обновление переменных окружения
@@ -351,7 +352,7 @@ configure_network() {
     NETWORK_IP="${ip:-""}"
     NETWORK_MASK="${netmask:-"255.255.255.0"}"
     NETWORK_GATEWAY="${gateway:-""}"
-    NETWORK_DNS="${dns:-"8.8.8.8 1.1.1.1"}"
+    NETWORK_DNS="${dns:-"8.8.8.8"}"
 }
 
 configure_bootloader() {
@@ -371,6 +372,7 @@ configure_cleanup() {
     echo "[Configuring] Cleanup parameters (usually nothing to configure)"
 }
 
+################################################################################################################################################
 ### RUN FUNCTIONS ###
 run_partitioning() {
     echo "[Running] Partitioning and RAID setup..."
@@ -494,6 +496,8 @@ run_network() {
         log "Network configuration applied successfully"
     else
         log_error "Failed to apply network configuration"
+        log_error "$(systemctl status networking.service)"
+        echo "$(journalctl -xeu networking.service)" > ./networking.service.dmp
         return 1
     fi
 
