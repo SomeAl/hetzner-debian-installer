@@ -11,6 +11,10 @@ CONFIG_FILE="hetzner-debian-installer.conf"
 SESSION_NAME="debian_install"
 # Массив точек монтирования
 declare -A MOUNT_POINTS
+# Массив точек монтирования
+MOUNT_POINTS["BOOT"]="/mnt/md0p1"
+MOUNT_POINTS["SWAP"]="/mnt/md0p2"
+MOUNT_POINTS["ROOT"]="/mnt/md0p3"
 
 # Auto-start inside screen session
 if [ -z "$STY" ]; then
@@ -254,12 +258,6 @@ configure_debian_install() {
         exit 1
     fi
 
-    # Массив точек монтирования
-    MOUNT_POINTS["BOOT"]="/mnt/md0p1"
-    MOUNT_POINTS["SWAP"]="/mnt/md0p2"
-    MOUNT_POINTS["ROOT"]="/mnt/md0p3"
-
-
     # Запрос у пользователя и проверка точек монтирования
     for key in "${!MOUNT_POINTS[@]}"; do
         read -rp "Enter installation target mount point for ${key} [${MOUNT_POINTS[$key]}]: " user_input
@@ -464,7 +462,7 @@ run_debian_install() {
 
     # Проверка и монтирование ROOT-раздела
     if ! mountpoint -q "${MOUNT_POINTS[ROOT]}"; then
-        validate_mount_point "$MOUNT_POINTS[ROOT]"
+        validate_mount_point $MOUNT_POINTS[ROOT]
         echo "Mounting root partition (/dev/md0p3) to ${MOUNT_POINTS[ROOT]}..."
         mount "/dev/md0p3" "${MOUNT_POINTS[ROOT]}"
     else
