@@ -584,16 +584,6 @@ save_configuration() {
     echo ""
 }
 
-# Load config file if exists
-if [ -f "$CONFIG_FILE" ]; then
-    echo "Loading configuration from $CONFIG_FILE"
-    source "$CONFIG_FILE"
-    summary_and_confirm
-    running
-else
-    echo "No configuration file found, proceeding interactively."
-fi
-
 ### Entrypoints ###
 configuring() {
     configure_partitioning
@@ -612,6 +602,16 @@ running() {
     run_initial_config
     run_cleanup
 }
+
+# Load config file if exists
+if [ -f "$CONFIG_FILE" ]; then
+    echo "Loading configuration from $CONFIG_FILE"
+    source "$CONFIG_FILE"
+    summary_and_confirm
+    running
+else
+    echo "No configuration file found, proceeding interactively."
+fi
 
 main() {
     configuring
