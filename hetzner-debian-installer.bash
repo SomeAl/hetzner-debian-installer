@@ -1,7 +1,7 @@
 #!/bin/bash
 set -eo pipefail
 
-LOG_FILE=""
+LOG_FILE="error.log"
 
 exec 3>&1 4>&2  
 # Весь stdout и stderr пишем в лог, но скрываем отладку в консоли
@@ -10,7 +10,7 @@ exec > >(tee -a $LOG_FILE) 2> >(tee -a $LOG_FILE >&4)
 (set -x; exec 2> >(tee -a $LOG_FILE >&4))
 
 
-CONFIG_FILE="hetzner-debian-installer.conf"
+CONFIG_FILE="env.conf"
 SESSION_NAME="debian_install"
 # Массив точек монтирования
 declare -A MOUNT_POINTS
@@ -31,7 +31,7 @@ if [ -z "$STY" ]; then
     exit 0
 fi
 
-if [ $1 == "c" ];then
+if [ "$1" == "c" ];then
     echo "======================================================================================================"
     echo "Start cleaning"
 
@@ -63,7 +63,6 @@ if [ $1 == "c" ];then
 fi
 
 screen -S "$STY" -X sessionname "$SESSION_NAME"
-
 
 ################################################################################################################################################
 ### HELPER FUNCTIONS ###
@@ -161,6 +160,27 @@ ensure_unmounted() {
     fi
 }
 
+
+gen_fstab() {
+    local rootfs="$1"
+    local fstab_path="$rootfs/etc/fstab"
+    echo "# /etc/fstab: static file system information." > "$fstab_path"
+    echo "# <file system> <mount point> <type> <options> <dump> <pass>" >> "$fstab_path"
+
+    blkid -o export | awk -v mp_root="${MOUNT_POINTS[ROOT]}" '
+    BEGIN { dev=""; uuid=""; type="" }
+    /^DEVNAME=/ { dev=$1; sub(/^DEVNAME=/, "", dev) }
+    /^UUID=/ { uuid=$1; sub(/^UUID=/, "", uuid) }
+    /^TYPE=/ {
+        type=$1; sub(/^TYPE=/, "", type)
+        if (dev && uuid && type) {
+            if (dev ~ /md0p3/) print "UUID=" uuid " / " type " defaults 0 1"
+            else if (dev ~ /md0p1/) print "UUID=" uuid " /boot " type " defaults 0 2"
+            else if (dev ~ /md0p2/) print "UUID=" uuid " none swap sw 0 0"
+            dev=uuid=type=""
+        }
+    }' >> "$fstab_path"
+}
 
 ################################################################################################################################################
 ### CONFIGURE FUNCTIONS ###
@@ -439,6 +459,7 @@ configure_cleanup() {
 
 ################################################################################################################################################
 ### RUN FUNCTIONS ###
+
 run_partitioning() {
     echo "[Running] Partitioning and RAID setup..."
 
@@ -535,42 +556,11 @@ run_debian_install() {
     mount --make-rslave "${MOUNT_POINTS[ROOT]}/dev"
     cp /etc/resolv.conf "${MOUNT_POINTS[ROOT]}/etc/"
 
-    # Генерация fstab
-    echo "[Info] Generating fstab inside ${MOUNT_POINTS[ROOT]}/etc/fstab..."
-    FSTAB_PATH="${MOUNT_POINTS[ROOT]}/etc/fstab"
-    cp /dev/null "$FSTAB_PATH"
-    echo "# Auto-generated fstab ($(date))" >> "$FSTAB_PATH"
+    echo "Generating /etc/fstab..."
+    gen_fstab "${MOUNT_POINTS[ROOT]}"
 
-    while read -r DEV MOUNTPOINT FSTYPE OPTIONS; do
-        # Пропуск виртуальных ФС
-        if [[ "$FSTYPE" =~ ^(tmpfs|devtmpfs|sysfs|proc|devpts|cgroup.*|securityfs|pstore|efivarfs|debugfs)$ ]]; then
-            continue
-        fi
-
-        # Исключаем временные и chroot пути
-        if [[ "$MOUNTPOINT" != ${MOUNT_POINTS[ROOT]}* ]]; then
-            continue
-        fi
-
-        REL_MOUNTPOINT="${MOUNTPOINT#${MOUNT_POINTS[ROOT]}}"
-        REL_MOUNTPOINT="${REL_MOUNTPOINT:-/}"
-
-        UUID=$(blkid -s UUID -o value "$DEV" 2>/dev/null)
-        if [ -n "$UUID" ]; then
-            DEV_ID="UUID=$UUID"
-        else
-            DEV_ID="$DEV"
-        fi
-
-        echo -e "$DEV_ID\t$REL_MOUNTPOINT\t$FSTYPE\t$OPTIONS\t0\t1" >> "$FSTAB_PATH"
-    done < <(findmnt -rn -o SOURCE,TARGET,FSTYPE,OPTIONS)
-
-    echo "[Done] fstab created at $FSTAB_PATH"
-
-    # Выход из функции — продолжение настройки предполагается в chroot
     echo "Debian base system installed successfully in ${MOUNT_POINTS[ROOT]}."
-    echo "You can now chroot into the system and continue configuration:"
-    echo "    chroot ${MOUNT_POINTS[ROOT]} /bin/bash"
+    echo "You can now chroot into the system for further configuration."
 }
 
 run_network() {
@@ -619,6 +609,7 @@ run_bootloader() { echo "[Running] Bootloader installation..."; }
 run_initial_config() { echo "[Running] Initial configuration..."; }
 run_cleanup() { echo "[Running] Cleanup and reboot..."; }
 
+################################################################################################################################################
 ### Summary and Confirmation ###
 summary_and_confirm() {
     echo ""
@@ -697,6 +688,7 @@ save_configuration() {
     echo ""
 }
 
+################################################################################################################################################
 ### Entrypoints ###
 configuring() {
     configure_partitioning
