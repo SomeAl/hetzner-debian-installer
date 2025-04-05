@@ -569,6 +569,7 @@ run_network() {
 
     log "Generating /etc/network/interfaces for $NETWORK_INTERFACE..."
 
+    # Формируем конфигурацию интерфейса
     {
         echo "auto $NETWORK_INTERFACE"
         if [[ "$NETWORK_USE_DHCP" == "yes" ]]; then
@@ -582,22 +583,22 @@ run_network() {
         fi
     } > "$target_config"
 
-    # Применяем конфигурацию
-    log "Restarting networking service..."
-    if chroot $chroot_dir /bin/bash -c systemctl restart networking; then
-        log "Network configuration applied successfully"
+    # Применяем конфигурацию (без использования systemctl)
+    log "Restarting networking interface $NETWORK_INTERFACE..."
+
+    # Если это DHCP, просто активируем интерфейс
+    if [[ "$NETWORK_USE_DHCP" == "yes" ]]; then
+        chroot "$chroot_dir" /sbin/ifdown "$NETWORK_INTERFACE" && chroot "$chroot_dir" /sbin/ifup "$NETWORK_INTERFACE"
     else
-        log_error "Failed to apply network configuration"
-        log_error "$(chroot $chroot_dir /bin/bash -c systemctl restart networking.service)"
-        echo "$(chroot $chroot_dir /bin/bash -c journalctl -xeu networking.service)" > ./networking.service.dmp
-        return 1
+        # Для статической конфигурации перезапускаем сетевой интерфейс
+        chroot "$chroot_dir" /sbin/ifdown "$NETWORK_INTERFACE" && chroot "$chroot_dir" /sbin/ifup "$NETWORK_INTERFACE"
     fi
 
     # Проверяем статус сети
-    if systemctl is-active --quiet networking; then
-        log "Networking service is active"
+    if chroot "$chroot_dir" /sbin/ip a show "$NETWORK_INTERFACE" | grep -q "inet"; then
+        log "Networking interface $NETWORK_INTERFACE is up"
     else
-        log_error "Networking service failed to start"
+        log_error "Networking interface $NETWORK_INTERFACE failed to start"
         return 1
     fi
 }
