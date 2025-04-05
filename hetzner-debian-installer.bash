@@ -691,17 +691,17 @@ save_configuration() {
 ################################################################################################################################################
 ### Entrypoints ###
 configuring() {
-    configure_partitioning
-    configure_debian_install
-    #configure_network
+    #configure_partitioning
+    #configure_debian_install
+    configure_network
     #configure_bootloader
     #configure_initial_config
     #configure_cleanup
 }
 
 running() {
-    run_partitioning
-    run_debian_install
+    #run_partitioning
+    #run_debian_install
     run_network
     run_bootloader
     run_initial_config
