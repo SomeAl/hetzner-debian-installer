@@ -1,6 +1,4 @@
 #!/bin/bash 
-set -eo pipefail
-
 LOG_FILE="error.log"
 
 exec 3>&1 4>&2  
@@ -18,18 +16,6 @@ declare -A MOUNT_POINTS
 MOUNT_POINTS["BOOT"]="/mnt/md0p1"
 MOUNT_POINTS["SWAP"]="/mnt/md0p2"
 MOUNT_POINTS["ROOT"]="/mnt/md0p3"
-
-# Auto-start inside screen session
-if [ -z "$STY" ]; then
-    if ! command -v screen &>/dev/null; then
-        echo "Installing screen..."
-        apt update && apt install screen -y
-    fi
-    echo "Launching installation inside screen session '$SESSION_NAME'..."
-    screen -dmS "$SESSION_NAME" bash "$0"
-    echo "Reconnect with: screen -r $SESSION_NAME"
-    exit 0
-fi
 
 if [ "$1" == "c" ];then
     echo "======================================================================================================"
@@ -60,6 +46,20 @@ if [ "$1" == "c" ];then
 
     echo "Finish cleaning"
     echo "======================================================================================================"
+fi
+
+set -eo pipefail
+
+# Auto-start inside screen session
+if [ -z "$STY" ]; then
+    if ! command -v screen &>/dev/null; then
+        echo "Installing screen..."
+        apt update && apt install screen -y
+    fi
+    echo "Launching installation inside screen session '$SESSION_NAME'..."
+    screen -dmS "$SESSION_NAME" bash "$0"
+    echo "Reconnect with: screen -r $SESSION_NAME"
+    exit 0
 fi
 
 screen -S "$STY" -X sessionname "$SESSION_NAME"
