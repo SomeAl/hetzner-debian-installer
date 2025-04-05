@@ -1,10 +1,13 @@
 #!/bin/bash
 set -eo pipefail
+
+LOG_FILE=""
+
 exec 3>&1 4>&2  
 # Весь stdout и stderr пишем в лог, но скрываем отладку в консоли
-exec > >(tee -a hetzner-debian-installer.log) 2> >(tee -a hetzner-debian-installer.log >&4)  
+exec > >(tee -a $LOG_FILE) 2> >(tee -a $LOG_FILE >&4)  
 # Включаем отладочный режим ТОЛЬКО в логах
-(set -x; exec 2> >(tee -a hetzner-debian-installer.log >&4))
+(set -x; exec 2> >(tee -a $LOG_FILE >&4))
 
 
 CONFIG_FILE="hetzner-debian-installer.conf"
@@ -28,10 +31,40 @@ if [ -z "$STY" ]; then
     exit 0
 fi
 
+if [ $1 == "c" ];then
+    echo "======================================================================================================"
+    echo "Start cleaning"
+
+    # umount 
+    umount  "${MOUNT_POINTS[ROOT]}/proc"
+    umount  "${MOUNT_POINTS[ROOT]}/sys"
+    umount  "${MOUNT_POINTS[ROOT]}/sys"
+    umount  "${MOUNT_POINTS[ROOT]}/dev"
+    
+    #disable swap
+    swapoff /dev/md0p2
+
+    #clear dabain install step
+    umount /mnt/md0p1
+    umount /mnt/md0p2
+    umount /mnt/md0p3
+
+    rm -rf /mnt/md0p1
+    rm -rf /mnt/md0p2
+    rm -rf /mnt/md0p3
+
+    #clear raid install step
+    mdadm --stop /dev/md0*
+    wipefs -a /dev/nvme{0,1}n1
+    mdadm --detail --scan >> /etc/mdadm/mdadm.conf
+
+    echo "Finish cleaning"
+    echo "======================================================================================================"
+fi
+
 screen -S "$STY" -X sessionname "$SESSION_NAME"
 
 
-################################################################################################################################################
 ################################################################################################################################################
 ### HELPER FUNCTIONS ###
 
@@ -127,6 +160,7 @@ ensure_unmounted() {
         fi
     fi
 }
+
 
 ################################################################################################################################################
 ### CONFIGURE FUNCTIONS ###
@@ -449,7 +483,7 @@ run_debian_install() {
         exit 1
     fi
 
-    # Проверка наличия пути установки
+    # Проверка точек монтирования
     for key in "${!MOUNT_POINTS[@]}"; do
         if [ ! -d "${MOUNT_POINTS[$key]}" ]; then
             echo "Creating mount point: ${MOUNT_POINTS[$key]}..."
@@ -460,38 +494,32 @@ run_debian_install() {
         fi
     done
 
-    # Проверка и монтирование ROOT-раздела
+    # Монтирование ROOT
     if ! mountpoint -q "${MOUNT_POINTS[ROOT]}"; then
         validate_mount_point "${MOUNT_POINTS[ROOT]}"
         echo "Mounting root partition (/dev/md0p3) to ${MOUNT_POINTS[ROOT]}..."
         mount "/dev/md0p3" "${MOUNT_POINTS[ROOT]}"
-    else
-        echo "Warning: ${MOUNT_POINTS[ROOT]} is already mounted."
     fi
 
-    # Проверка и монтирование BOOT-раздела (если задан)
+    # Монтирование BOOT
     if [ -n "${MOUNT_POINTS[BOOT]}" ] && [ -d "${MOUNT_POINTS[BOOT]}" ]; then
         if ! mountpoint -q "${MOUNT_POINTS[BOOT]}"; then
             validate_mount_point "${MOUNT_POINTS[BOOT]}"
             echo "Mounting boot partition (/dev/md0p1) to ${MOUNT_POINTS[BOOT]}..."
             mount "/dev/md0p1" "${MOUNT_POINTS[BOOT]}"
-        else
-            echo "Warning: ${MOUNT_POINTS[BOOT]} is already mounted."
         fi
     fi
 
-    # Монтирование SWAP-раздела (если указан)
+    # SWAP
     if [ -n "${MOUNT_POINTS[SWAP]}" ] && [ -d "${MOUNT_POINTS[SWAP]}" ]; then
         if ! swapon --show | grep -q "${MOUNT_POINTS[SWAP]}"; then
             validate_mount_point "${MOUNT_POINTS[SWAP]}"
-            echo "Activating swap partition (/dev/md0p2..."
-            swapon "/dev/md0p2" 
-        else
-            echo "Warning: Swap partition is already active."
+            echo "Activating swap partition (/dev/md0p2)..."
+            swapon "/dev/md0p2"
         fi
     fi
 
-    # Запуск debootstrap
+    # debootstrap
     echo "Starting debootstrap for Debian $DEBIAN_RELEASE using mirror $DEBIAN_MIRROR..."
     debootstrap --arch=amd64 "$DEBIAN_RELEASE" "${MOUNT_POINTS[ROOT]}" "$DEBIAN_MIRROR"
     if [ $? -ne 0 ]; then
@@ -499,7 +527,50 @@ run_debian_install() {
         exit 1
     fi
 
+    # Монтирование системных директорий в chroot
+    mount --types proc /proc "${MOUNT_POINTS[ROOT]}/proc"
+    mount --rbind /sys "${MOUNT_POINTS[ROOT]}/sys"
+    mount --make-rslave "${MOUNT_POINTS[ROOT]}/sys"
+    mount --rbind /dev "${MOUNT_POINTS[ROOT]}/dev"
+    mount --make-rslave "${MOUNT_POINTS[ROOT]}/dev"
+    cp /etc/resolv.conf "${MOUNT_POINTS[ROOT]}/etc/"
+
+    # Генерация fstab
+    echo "[Info] Generating fstab inside ${MOUNT_POINTS[ROOT]}/etc/fstab..."
+    FSTAB_PATH="${MOUNT_POINTS[ROOT]}/etc/fstab"
+    cp /dev/null "$FSTAB_PATH"
+    echo "# Auto-generated fstab ($(date))" >> "$FSTAB_PATH"
+
+    while read -r DEV MOUNTPOINT FSTYPE OPTIONS; do
+        # Пропуск виртуальных ФС
+        if [[ "$FSTYPE" =~ ^(tmpfs|devtmpfs|sysfs|proc|devpts|cgroup.*|securityfs|pstore|efivarfs|debugfs)$ ]]; then
+            continue
+        fi
+
+        # Исключаем временные и chroot пути
+        if [[ "$MOUNTPOINT" != ${MOUNT_POINTS[ROOT]}* ]]; then
+            continue
+        fi
+
+        REL_MOUNTPOINT="${MOUNTPOINT#${MOUNT_POINTS[ROOT]}}"
+        REL_MOUNTPOINT="${REL_MOUNTPOINT:-/}"
+
+        UUID=$(blkid -s UUID -o value "$DEV" 2>/dev/null)
+        if [ -n "$UUID" ]; then
+            DEV_ID="UUID=$UUID"
+        else
+            DEV_ID="$DEV"
+        fi
+
+        echo -e "$DEV_ID\t$REL_MOUNTPOINT\t$FSTYPE\t$OPTIONS\t0\t1" >> "$FSTAB_PATH"
+    done < <(findmnt -rn -o SOURCE,TARGET,FSTYPE,OPTIONS)
+
+    echo "[Done] fstab created at $FSTAB_PATH"
+
+    # Выход из функции — продолжение настройки предполагается в chroot
     echo "Debian base system installed successfully in ${MOUNT_POINTS[ROOT]}."
+    echo "You can now chroot into the system and continue configuration:"
+    echo "    chroot ${MOUNT_POINTS[ROOT]} /bin/bash"
 }
 
 run_network() {
@@ -630,7 +701,7 @@ save_configuration() {
 configuring() {
     configure_partitioning
     configure_debian_install
-    configure_network
+    #configure_network
     #configure_bootloader
     #configure_initial_config
     #configure_cleanup
