@@ -564,36 +564,32 @@ run_debian_install() {
 }
 
 run_network() {
-    chroot "${MOUNT_POINTS[ROOT]}"
-    local config_file="/etc/network/interfaces"
+    local chroot_dir="${MOUNT_POINTS[ROOT]}"
+    local target_config="$chroot_dir/etc/network/interfaces"
 
-    # Формируем конфигурацию в зависимости от режима
-    if [[ "$NETWORK_USE_DHCP" == "yes" ]]; then
-        log "Configuring DHCP for $NETWORK_INTERFACE"
-        {
-            printf "auto %s\n" "$NETWORK_INTERFACE"
-            printf "iface %s inet dhcp\n" "$NETWORK_INTERFACE"
-        } > "$config_file"
-    else
-        log "Configuring static IP: $NETWORK_IP/$NETWORK_MASK"
-        {
-            printf "auto %s\n" "$NETWORK_INTERFACE"
-            printf "iface %s inet static\n" "$NETWORK_INTERFACE"
-            printf "    address %s\n" "$NETWORK_IP"
-            printf "    netmask %s\n" "$NETWORK_MASK"
-            printf "    gateway %s\n" "$NETWORK_GATEWAY"
-            printf "    dns-nameservers %s\n" "$NETWORK_DNS"
-        } > "$config_file"
-    fi
+    log "Generating /etc/network/interfaces for $NETWORK_INTERFACE..."
+
+    {
+        echo "auto $NETWORK_INTERFACE"
+        if [[ "$NETWORK_USE_DHCP" == "yes" ]]; then
+            echo "iface $NETWORK_INTERFACE inet dhcp"
+        else
+            echo "iface $NETWORK_INTERFACE inet static"
+            echo "    address $NETWORK_IP"
+            echo "    netmask $NETWORK_MASK"
+            echo "    gateway $NETWORK_GATEWAY"
+            echo "    dns-nameservers $NETWORK_DNS"
+        fi
+    } > "$target_config"
 
     # Применяем конфигурацию
     log "Restarting networking service..."
-    if systemctl restart networking; then
+    if chroot $chroot_dir /bin/bash -c systemctl restart networking; then
         log "Network configuration applied successfully"
     else
         log_error "Failed to apply network configuration"
-        log_error "$(systemctl status networking.service)"
-        echo "$(journalctl -xeu networking.service)" > ./networking.service.dmp
+        log_error "$(chroot $chroot_dir /bin/bash -c systemctl restart networking.service)"
+        echo "$(chroot $chroot_dir /bin/bash -c journalctl -xeu networking.service)" > ./networking.service.dmp
         return 1
     fi
 
