@@ -350,7 +350,7 @@ configure_network() {
     NETWORK_USE_DHCP="${NETWORK_USE_DHCP,,}"  # в нижний регистр
     NETWORK_USE_DHCP="${NETWORK_USE_DHCP:-yes}"
 
-    if [[ "$NETWORK_USE_DHCP" == "yes" ]]; then
+    if [[ "$NETWORK_USE_DHCP" != "no" ]]; then
         echo "Using DHCP configuration for interface '$NET_IFACE'."
 
         # Проверка, работает ли DHCP на интерфейсе
