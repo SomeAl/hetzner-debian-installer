@@ -564,7 +564,7 @@ run_debian_install() {
 }
 
 run_network() {
-    chroot $MOUNT_POINTS[ROOT]
+    chroot "$MOUNT_POINTS[ROOT]"
     local config_file="/etc/network/interfaces"
 
     # Формируем конфигурацию в зависимости от режима
