@@ -670,6 +670,7 @@ save_configuration() {
         ""
         "# Network"
         "NETWORK_USE_DHCP=${NETWORK_USE_DHCP}"
+        "NETWORK_INTERFACE=${NETWORK_INTERFACE}"
         "NETWORK_IP=${NETWORK_IP}"
         "NETWORK_MASK=${NETWORK_MASK}"
         "NETWORK_GATEWAY=${NETWORK_GATEWAY}"
