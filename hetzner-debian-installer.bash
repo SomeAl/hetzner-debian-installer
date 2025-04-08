@@ -182,6 +182,33 @@ gen_fstab() {
     }' >> "$fstab_path"
 }
 
+# Функция проверки существования блочного устройства
+device_exists() {
+    if [ -b "$1" ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Функция для определения, запущена ли система в режиме UEFI
+is_uefi_system() {
+    if [ -d /sys/firmware/efi ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+# Функция валидации файла конфигурации GRUB
+validate_grub_config() {
+    if [ -f /boot/grub/grub.cfg ] && [ -s /boot/grub/grub.cfg ]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
 ################################################################################################################################################
 ### CONFIGURE FUNCTIONS ###
 
@@ -440,11 +467,50 @@ configure_network() {
     NETWORK_DNS="${dns:-"8.8.8.8"}"
 }
 
+# Дополненная функция конфигурации загрузчика
 configure_bootloader() {
     echo "[Configuring] Bootloader parameters"
+    # Если переменная GRUB_TARGET_DRIVES не задана,
+    # то в случае RAID используем оба диска, иначе – только основной диск.
     if [ -z "${GRUB_TARGET_DRIVES[*]}" ]; then
-        read -rp 'GRUB target drives (space-separated): ' -a GRUB_TARGET_DRIVES
+        if [ "${PART_USE_RAID:-no}" = "yes" ]; then
+            GRUB_TARGET_DRIVES=("$PART_DRIVE1" "$PART_DRIVE2")
+        else
+            GRUB_TARGET_DRIVES=("$PART_DRIVE1")
+        fi
+        echo "Default GRUB target drives set to: ${GRUB_TARGET_DRIVES[*]}"
+        read -rp "Press Enter to accept or type alternative (space-separated list): " -a user_drives
+        if [ ${#user_drives[@]} -gt 0 ]; then
+            GRUB_TARGET_DRIVES=("${user_drives[@]}")
+        fi
     fi
+
+    # Валидация каждого указанного диска
+    local valid_drives=()
+    for disk in "${GRUB_TARGET_DRIVES[@]}"; do
+        while true; do
+            if device_exists "$disk"; then
+                log "Disk $disk found."
+                valid_drives+=("$disk")
+                break
+            else
+                log_error "Disk $disk not found or is not a block device."
+                read -rp "Enter a correct device for '$disk' or press Enter to skip: " newdisk
+                if [ -z "$newdisk" ]; then
+                    log_error "Skipping device $disk (this may affect boot reliability)."
+                    break
+                else
+                    disk="$newdisk"
+                fi
+            fi
+        done
+    done
+    if [ ${#valid_drives[@]} -eq 0 ]; then
+        log_error "No valid GRUB target drives found. Exiting."
+        exit 1
+    fi
+    GRUB_TARGET_DRIVES=("${valid_drives[@]}")
+    echo "Final GRUB target drives: ${GRUB_TARGET_DRIVES[*]}"
 }
 
 configure_initial_config() {
@@ -603,7 +669,42 @@ run_network() {
     fi
 }
 
-run_bootloader() { echo "[Running] Bootloader installation..."; }
+# Обновлённая функция установки загрузчика с учётом RAID-массива
+run_bootloader() {
+    log "Running Bootloader installation..."
+    if [ -z "${GRUB_TARGET_DRIVES[*]}" ]; then
+        log_error "GRUB target drives not configured. Exiting."
+        exit 1
+    fi
+    for disk in "${GRUB_TARGET_DRIVES[@]}"; do
+        if ! device_exists "$disk"; then
+            log_error "Device $disk not found. Exiting."
+            exit 1
+        fi
+        if is_uefi_system; then
+            log "UEFI system detected. Installing GRUB with EFI support on $disk..."
+            grub-install --target=x86_64-efi --efi-directory=/boot/efi --recheck "$disk"
+        else
+            log "BIOS system detected. Installing GRUB on $disk..."
+            grub-install --target=i386-pc --recheck "$disk"
+        fi
+        if [ $? -ne 0 ]; then
+            log_error "Error installing GRUB on $disk"
+            exit 1
+        fi
+    done
+    log "Updating GRUB configuration..."
+    if ! update-grub; then
+        log_error "update-grub failed"
+        exit 1
+    fi
+    if ! validate_grub_config; then
+        log_error "GRUB configuration invalid or missing"
+        exit 1
+    fi
+    log "Bootloader installation complete."
+}
+
 run_initial_config() { echo "[Running] Initial configuration..."; }
 run_cleanup() { echo "[Running] Cleanup and reboot..."; }
 
@@ -690,10 +791,10 @@ save_configuration() {
 ################################################################################################################################################
 ### Entrypoints ###
 configuring() {
-    #configure_partitioning
-    #configure_debian_install
+    configure_partitioning
+    configure_debian_install
     configure_network
-    #configure_bootloader
+    configure_bootloader
     #configure_initial_config
     #configure_cleanup
 }
@@ -701,7 +802,7 @@ configuring() {
 running() {
     #run_partitioning
     #run_debian_install
-    run_network
+    #run_network
     run_bootloader
     run_initial_config
     run_cleanup
