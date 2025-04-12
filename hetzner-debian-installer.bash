@@ -7,6 +7,15 @@ exec > >(tee -a $LOG_FILE) 2> >(tee -a $LOG_FILE >&4)
 # Включаем отладочный режим ТОЛЬКО в логах
 (set -x; exec 2> >(tee -a $LOG_FILE >&4))
 
+# функции логирования
+log() {
+    log "[INFO] $@" | tee /dev/fd/3
+}
+
+log_error() {
+    log -e "\033[0;31m[ERROR] $@\033[0m" | tee /dev/fd/3 >&2
+}
+
 
 CONFIG_FILE="env.conf"
 SESSION_NAME="debian_install"
@@ -66,15 +75,6 @@ screen -S "$STY" -X sessionname "$SESSION_NAME"
 
 ################################################################################################################################################
 ### HELPER FUNCTIONS ###
-
-# функции логирования
-log() {
-    log "[INFO] $@" | tee /dev/fd/3
-}
-
-log_error() {
-    log -e "\033[0;31m[ERROR] $@\033[0m" | tee /dev/fd/3 >&2
-}
 
 find_disks() {
     lsblk -dpno NAME,TYPE | awk '$2 == "disk" {print $1}'
