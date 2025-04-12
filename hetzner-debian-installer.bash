@@ -902,7 +902,7 @@ configuring() {
     configure_network
     configure_bootloader
     configure_initial_config
-    onfigure_cleanup
+    configure_cleanup
 }
 
 running() {
