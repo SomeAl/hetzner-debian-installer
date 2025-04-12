@@ -17,36 +17,80 @@ MOUNT_POINTS["BOOT"]="/mnt/md0p1"
 MOUNT_POINTS["SWAP"]="/mnt/md0p2"
 MOUNT_POINTS["ROOT"]="/mnt/md0p3"
 
-if [ "$1" == "c" ];then
+if [ "$1" == "c" ]; then
     echo "======================================================================================================"
     echo "Start cleaning"
 
-    # umount 
-    umount  "${MOUNT_POINTS[ROOT]}/proc"
-    umount  "${MOUNT_POINTS[ROOT]}/sys"
-    umount  "${MOUNT_POINTS[ROOT]}/sys"
-    umount  "${MOUNT_POINTS[ROOT]}/dev"
-    
-    #disable swap
-    swapoff /dev/md0p2
+    # Удаляем все mount points рекурсивно с обработкой ошибок
+    for mount_point in "${MOUNT_POINTS[ROOT]}/proc" \
+                      "${MOUNT_POINTS[ROOT]}/sys" \
+                      "${MOUNT_POINTS[ROOT]}/dev" \
+                      "/mnt/md0p1" \
+                      "/mnt/md0p2" \
+                      "/mnt/md0p3"; do
+        if mountpoint -q "$mount_point"; then
+            echo "Unmounting $mount_point"
+            umount -lfR "$mount_point" 2>/dev/null || true
+        fi
+    done
 
-    #clear dabain install step
-    umount /mnt/md0p1
-    umount /mnt/md0p2
-    umount /mnt/md0p3
+    # Отключаем swap с проверкой
+    if swapon --show | grep -q "/dev/md0p2"; then
+        echo "Disabling swap"
+        swapoff -a
+        swapoff /dev/md0p2 2>/dev/null || true
+    fi
 
-    rm -rf /mnt/md0p1
-    rm -rf /mnt/md0p2
-    rm -rf /mnt/md0p3
+    # Убиваем процессы, использующие наши устройства
+    for dev in /dev/md0p* /dev/nvme{0,1}n1; do
+        if [ -b "$dev" ]; then
+            echo "Killing processes using $dev"
+            fuser -km "$dev" 2>/dev/null || true
+            lsof -t "$dev" | xargs -r kill -9 2>/dev/null || true
+        fi
+    done
 
-    #clear raid install step
-    mdadm --stop /dev/md0p*
-    wipefs -a /dev/nvme{0,1}n1
-    mdadm --detail --scan >> /etc/mdadm/mdadm.conf
+    # Останавливаем RAID массивы
+    for raid_dev in /dev/md0p*; do
+        if [ -b "$raid_dev" ]; then
+            echo "Stopping RAID $raid_dev"
+            mdadm --stop "$raid_dev" 2>/dev/null || true
+            mdadm --remove "$raid_dev" 2>/dev/null || true
+        fi
+    done
+
+    # Очищаем LVM (если используется)
+    if command -v vgchange &>/dev/null; then
+        echo "Deactivating LVM volumes"
+        vgchange -an 2>/dev/null || true
+        pvremove -ff -y /dev/nvme{0,1}n1 2>/dev/null || true
+    fi
+
+    # Удаляем директории
+    echo "Removing mount directories"
+    rm -rf /mnt/md0p{1,2,3} 2>/dev/null || true
+
+    # Очищаем файловые системы
+    echo "Wiping filesystems"
+    for dev in /dev/nvme{0,1}n1 /dev/md0p*; do
+        if [ -b "$dev" ]; then
+            wipefs -a "$dev" 2>/dev/null || true
+            dd if=/dev/zero of="$dev" bs=1M count=100 2>/dev/null || true
+        fi
+    done
+
+    # Обновляем конфигурацию mdadm
+    echo "Updating mdadm config"
+    mkdir -p /etc/mdadm
+    mdadm --detail --scan > /etc/mdadm/mdadm.conf 2>/dev/null || true
+
+    # Дополнительная очистка udev
+    udevadm settle
+    blockdev --flushbufs /dev/nvme{0,1}n1 2>/dev/null || true
 
     echo "Finish cleaning"
     echo "======================================================================================================"
-    exit 1
+    exit 0
 fi
 
 set -eo pipefail
