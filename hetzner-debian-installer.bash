@@ -901,14 +901,14 @@ configuring() {
     configure_debian_install
     configure_network
     configure_bootloader
-    #configure_initial_config
-    #configure_cleanup
+    configure_initial_config
+    onfigure_cleanup
 }
 
 running() {
-    #run_partitioning
-    #run_debian_install
-    #run_network
+    run_partitioning
+    run_debian_install
+    run_network
     run_bootloader
     run_initial_config
     run_cleanup
