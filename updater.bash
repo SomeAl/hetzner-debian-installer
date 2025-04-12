@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # === Настройки ===
-REPO_DIR="/root/hetzner-debian-installer/"  # Укажите путь к локальному репозиторию
+REPO_DIR="/root/hetzner-debian-installer"  # Укажите путь к локальному репозиторию
 BRANCH="main"                  # Ветка, за которой следить
 GIT_REMOTE="origin"            # Удаленный репозиторий
 
