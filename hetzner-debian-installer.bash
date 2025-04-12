@@ -26,53 +26,6 @@ MOUNT_POINTS["BOOT"]="/mnt/md0p1"
 MOUNT_POINTS["SWAP"]="/mnt/md0p2"
 MOUNT_POINTS["ROOT"]="/mnt/md0p3"
 
-if [ "$1" == "c" ];then
-    log "======================================================================================================"
-    log "Start cleaning"
-
-    # umount 
-    umount  "${MOUNT_POINTS[ROOT]}/proc"
-    umount  "${MOUNT_POINTS[ROOT]}/sys"
-    umount  "${MOUNT_POINTS[ROOT]}/sys"
-    umount  "${MOUNT_POINTS[ROOT]}/dev"
-    
-    #disable swap
-    swapoff /dev/md0p2
-
-    #clear dabain install step
-    umount /mnt/md0p1
-    umount /mnt/md0p2
-    umount /mnt/md0p3
-
-    rm -rf /mnt/md0p1
-    rm -rf /mnt/md0p2
-    rm -rf /mnt/md0p3
-
-    #clear raid install step
-    mdadm --stop /dev/md0*
-    wipefs -a /dev/nvme{0,1}n1
-    mdadm --detail --scan >> /etc/mdadm/mdadm.conf
-
-    log "Finish cleaning"
-    log "======================================================================================================"
-fi
-
-set -eo pipefail
-
-# Auto-start inside screen session
-if [ -z "$STY" ]; then
-    if ! command -v screen &>/dev/null; then
-        log "Installing screen..."
-        apt update && apt install screen -y
-    fi
-    log "Launching installation inside screen session '$SESSION_NAME'..."
-    screen -dmS "$SESSION_NAME" bash "$0"
-    log "Reconnect with: screen -r $SESSION_NAME"
-    exit 0
-fi
-
-screen -S "$STY" -X sessionname "$SESSION_NAME"
-
 ################################################################################################################################################
 ### HELPER FUNCTIONS ###
 
@@ -199,6 +152,54 @@ validate_grub_config() {
         return 1
     fi
 }
+
+
+if [ "$1" == "c" ];then
+    log "======================================================================================================"
+    log "Start cleaning"
+
+    # umount 
+    umount  "${MOUNT_POINTS[ROOT]}/proc"
+    umount  "${MOUNT_POINTS[ROOT]}/sys"
+    umount  "${MOUNT_POINTS[ROOT]}/sys"
+    umount  "${MOUNT_POINTS[ROOT]}/dev"
+    
+    #disable swap
+    swapoff /dev/md0p2
+
+    #clear dabain install step
+    umount /mnt/md0p1
+    umount /mnt/md0p2
+    umount /mnt/md0p3
+
+    rm -rf /mnt/md0p1
+    rm -rf /mnt/md0p2
+    rm -rf /mnt/md0p3
+
+    #clear raid install step
+    mdadm --stop /dev/md0*
+    wipefs -a /dev/nvme{0,1}n1
+    mdadm --detail --scan >> /etc/mdadm/mdadm.conf
+
+    log "Finish cleaning"
+    log "======================================================================================================"
+fi
+
+set -eo pipefail
+
+# Auto-start inside screen session
+if [ -z "$STY" ]; then
+    if ! command -v screen &>/dev/null; then
+        log "Installing screen..."
+        apt update && apt install screen -y
+    fi
+    log "Launching installation inside screen session '$SESSION_NAME'..."
+    screen -dmS "$SESSION_NAME" bash "$0"
+    log "Reconnect with: screen -r $SESSION_NAME"
+    exit 0
+fi
+
+screen -S "$STY" -X sessionname "$SESSION_NAME"
 
 ################################################################################################################################################
 ### CONFIGURE FUNCTIONS ###
