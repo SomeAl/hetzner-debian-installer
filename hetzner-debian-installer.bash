@@ -460,7 +460,7 @@ configure_network() {
 
 # Дополненная функция конфигурации загрузчика
 configure_bootloader() {
-    log "[Configuring] Bootloader parameters"
+    log "[CONFIGURE_BOOTLOADER] [Configuring] Bootloader parameters"
     # Если переменная GRUB_TARGET_DRIVES не задана,
     # то в случае RAID используем оба диска, иначе – только основной диск.
     if [ -z "${GRUB_TARGET_DRIVES[*]}" ]; then
@@ -469,7 +469,7 @@ configure_bootloader() {
         else
             GRUB_TARGET_DRIVES=("$PART_DRIVE1")
         fi
-        log "Default GRUB target drives set to: ${GRUB_TARGET_DRIVES[*]}"
+        log "[CONFIGURE_BOOTLOADER] Default GRUB target drives set to: ${GRUB_TARGET_DRIVES[*]}"
         read -rp "Press Enter to accept or type alternative (space-separated list): " -a user_drives
         if [ ${#user_drives[@]} -gt 0 ]; then
             GRUB_TARGET_DRIVES=("${user_drives[@]}")
@@ -485,10 +485,10 @@ configure_bootloader() {
                 valid_drives+=("$disk")
                 break
             else
-                log_error "Disk $disk not found or is not a block device."
+                log_error "[CONFIGURE_BOOTLOADER] Disk $disk not found or is not a block device."
                 read -rp "Enter a correct device for '$disk' or press Enter to skip: " newdisk
                 if [ -z "$newdisk" ]; then
-                    log_error "Skipping device $disk (this may affect boot reliability)."
+                    log_error "[CONFIGURE_BOOTLOADER] Skipping device $disk (this may affect boot reliability)."
                     break
                 else
                     disk="$newdisk"
@@ -690,39 +690,69 @@ run_network() {
 
 # Обновлённая функция установки загрузчика с учётом RAID-массива
 run_bootloader() {
-    log "Running Bootloader installation..."
+    log "[RUN_BOOTLOADER] Running Bootloader installation..."
+
     if [ -z "${GRUB_TARGET_DRIVES[*]}" ]; then
-        log_error "GRUB target drives not configured. Exiting."
+        log_error "[RUN_BOOTLOADER] GRUB target drives not configured. Exiting."
         exit 1
     fi
+
     for disk in "${GRUB_TARGET_DRIVES[@]}"; do
         if ! device_exists "$disk"; then
-            log_error "Device $disk not found. Exiting."
+            log_error "[RUN_BOOTLOADER] Device $disk not found. Exiting."
             exit 1
         fi
+
         if is_uefi_system; then
-            log "UEFI system detected. Installing GRUB with EFI support on $disk..."
-            grub-install --target=x86_64-efi --efi-directory=/boot/efi --recheck "$disk"
+            log "[RUN_BOOTLOADER] UEFI system detected. Installing GRUB with EFI support on $disk..."
+
+            # Проверка, что EFI-путь смонтирован
+            if [ ! -d /boot/efi ]; then
+                log_error "[RUN_BOOTLOADER] EFI directory /boot/efi not mounted. Exiting."
+                exit 1
+            fi
+
+            # Установка grub-efi-amd64, если не установлен
+            if ! grub-install --version | grep -q 'x86_64-efi'; then
+                log "[RUN_BOOTLOADER] grub-efi-amd64 not detected. Attempting to install..."
+                apt-get update && apt-get install -y grub-efi-amd64
+            fi
+
+            grub-install --target=x86_64-efi \
+                         --efi-directory=/boot/efi \
+                         --bootloader-id=debian \
+                         --recheck \
+                         --no-nvram \
+                         --removable
+
         else
-            log "BIOS system detected. Installing GRUB on $disk..."
-            grub-install --target=i386-pc --recheck "$disk"
+            log "[RUN_BOOTLOADER] BIOS system detected. Installing GRUB on $disk..."
+            grub-install --target=i386-pc \
+                         --boot-directory=/boot \
+                         --recheck \
+                         "$disk"
         fi
+
         if [ $? -ne 0 ]; then
-            log_error "Error installing GRUB on $disk"
+            log_error "[RUN_BOOTLOADER] Error installing GRUB on $disk"
             exit 1
         fi
     done
-    log "Updating GRUB configuration..."
+
+    log "[RUN_BOOTLOADER] Updating GRUB configuration..."
     if ! update-grub; then
-        log_error "update-grub failed"
+        log_error "[RUN_BOOTLOADER] update-grub failed"
         exit 1
     fi
+
     if ! validate_grub_config; then
-        log_error "GRUB configuration invalid or missing"
+        log_error "[RUN_BOOTLOADER] GRUB configuration invalid or missing"
         exit 1
     fi
-    log "Bootloader installation complete."
+
+    log "[RUN_BOOTLOADER] Bootloader installation complete."
 }
+
 
 run_initial_config() {
     log "[Running] Applying initial system configuration..."
