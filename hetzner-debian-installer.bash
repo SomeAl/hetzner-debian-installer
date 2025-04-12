@@ -59,13 +59,6 @@ if [ "$1" == "c" ]; then
         fi
     done
 
-    # Очищаем LVM (если используется)
-    if command -v vgchange &>/dev/null; then
-        echo "Deactivating LVM volumes"
-        vgchange -an 2>/dev/null || true
-        pvremove -ff -y /dev/nvme{0,1}n1 2>/dev/null || true
-    fi
-
     # Удаляем директории
     echo "Removing mount directories"
     rm -rf /mnt/md0p{1,2,3} 2>/dev/null || true
@@ -83,10 +76,6 @@ if [ "$1" == "c" ]; then
     echo "Updating mdadm config"
     mkdir -p /etc/mdadm
     mdadm --detail --scan > /etc/mdadm/mdadm.conf 2>/dev/null || true
-
-    # Дополнительная очистка udev
-    udevadm settle
-    blockdev --flushbufs /dev/nvme{0,1}n1 2>/dev/null || true
 
     echo "Finish cleaning"
     echo "======================================================================================================"
