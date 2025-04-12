@@ -514,13 +514,50 @@ configure_bootloader() {
 }
 
 configure_initial_config() {
-    echo "[Configuring] Initial system settings"
-    : "${HOSTNAME:?$(read -rp 'Hostname: ' HOSTNAME)}"
-    : "${ROOT_PASSWORD:?$(read -rp 'Root password: ' ROOT_PASSWORD)}"
+    echo "[Configuring] Initial System Configuration"
+    
+    # Запрос имени хоста с дефолтом "debian-server"
+    read -rp "Enter hostname [debian-server]: " input_hostname
+    SYSTEM_HOSTNAME="${input_hostname:-debian-server}"
+    
+    # Запрос имени пользователя с sudo-доступом с дефолтом "admin"
+    read -rp "Enter username for sudo access [admin]: " input_sudo_user
+    SYSTEM_SUDO_USER="${input_sudo_user:-admin}"
+    
+    # Запрос пароля для пользователя (без эха)
+    while true; do
+        read -srp "Enter password for user '$SYSTEM_SUDO_USER': " user_password
+        echo
+        read -srp "Confirm password: " user_password_confirm
+        echo
+        if [ "$user_password" != "$user_password_confirm" ]; then
+            echo "Passwords do not match. Please try again."
+        elif [ -z "$user_password" ]; then
+            echo "Password cannot be empty. Please try again."
+        else
+            break
+        fi
+    done
+    
+    # Генерация SHA-512 хеша пароля
+    SYSTEM_USER_PASSWORD_HASH=$(openssl passwd -6 "$user_password")
+    
+    # Сохранение параметров в конфигурационный файл
+    CONFIG_FILE_NAME="hetzner-debian-installer.conf.bash"
+    {
+        echo "SYSTEM_HOSTNAME=\"$SYSTEM_HOSTNAME\""
+        echo "SYSTEM_SUDO_USER=\"$SYSTEM_SUDO_USER\""
+        echo "SYSTEM_USER_PASSWORD_HASH=\"$SYSTEM_USER_PASSWORD_HASH\""
+    } > "$CONFIG_FILE_NAME"
+    echo "Configuration saved to $CONFIG_FILE_NAME"
 }
 
 configure_cleanup() {
-    echo "[Configuring] Cleanup parameters (usually nothing to configure)"
+    log "[Configuring] Cleanup parameters"
+    # Если в будущем понадобятся дополнительные настройки очистки (например,
+    # пути для удаления временных файлов), их можно задать здесь.
+    # Пока данный этап не требует интерактивной настройки.
+    log "Cleanup configuration: defaults will be used."
 }
 
 ################################################################################################################################################
@@ -705,9 +742,78 @@ run_bootloader() {
     log "Bootloader installation complete."
 }
 
-run_initial_config() { echo "[Running] Initial configuration..."; }
-run_cleanup() { echo "[Running] Cleanup and reboot..."; }
+run_initial_config() {
+    echo "[Running] Applying initial system configuration..."
+    
+    # Установка hostname
+    echo "$SYSTEM_HOSTNAME" > /etc/hostname
+    echo "Hostname set to $SYSTEM_HOSTNAME"
+    
+    # Создание нового пользователя с домашней директорией и bash в качестве оболочки
+    if id "$SYSTEM_SUDO_USER" &>/dev/null; then
+        echo "User $SYSTEM_SUDO_USER already exists, skipping creation."
+    else
+        useradd -m -s /bin/bash "$SYSTEM_SUDO_USER"
+        echo "User $SYSTEM_SUDO_USER created."
+    fi
 
+    # Установка хешированного пароля для созданного пользователя
+    echo "$SYSTEM_SUDO_USER:$SYSTEM_USER_PASSWORD_HASH" | chpasswd -e
+    echo "Password for $SYSTEM_SUDO_USER set (using hash)."
+
+    # Добавление пользователя в группу sudo
+    usermod -aG sudo "$SYSTEM_SUDO_USER"
+    echo "User $SYSTEM_SUDO_USER added to sudo group."
+
+    # Отключение возможности входа по SSH через учетную запись root
+    if grep -q "^PermitRootLogin yes" /etc/ssh/sshd_config; then
+        sed -i 's/^PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
+        echo "Root login via SSH has been disabled."
+    else
+        echo "PermitRootLogin already disabled or not set."
+    fi
+
+    # Перезапуск сервиса SSH для применения изменений
+    systemctl restart sshd
+    echo "SSH service restarted."
+}
+run_cleanup() {
+    log "[Running] Final cleanup: unmounting file systems, cleaning temporary data and rebooting system."
+
+    # Отмонтирование разделов, указанных в массиве MOUNT_POINTS
+    for mount_point in "${MOUNT_POINTS[@]}"; do
+        if mountpoint -q "$mount_point"; then
+            log "Unmounting $mount_point..."
+            run_cmd umount -l "$mount_point"
+        else
+            log "Mount point $mount_point is not mounted."
+        fi
+    done
+
+    # Отмонтирование системных директорий, смонтированных в chroot
+    chroot_dir="${MOUNT_POINTS[ROOT]}"
+    if mountpoint -q "$chroot_dir/proc"; then
+        log "Unmounting $chroot_dir/proc..."
+        run_cmd umount -l "$chroot_dir/proc"
+    fi
+    if mountpoint -q "$chroot_dir/sys"; then
+        log "Unmounting $chroot_dir/sys..."
+        run_cmd umount -l "$chroot_dir/sys"
+    fi
+    if mountpoint -q "$chroot_dir/dev"; then
+        log "Unmounting $chroot_dir/dev..."
+        run_cmd umount -l "$chroot_dir/dev"
+    fi
+
+    # Очистка временных данных (при необходимости)
+    # Например, можно удалить временные файлы, созданные во время установки.
+    # Здесь можно добавить вызовы rm -rf для удаления временных каталогов,
+    # если они не нужны после установки.
+
+    log "Cleanup completed. System will reboot in 10 seconds..."
+    sleep 10
+    run_cmd reboot
+}
 ################################################################################################################################################
 ### Summary and Confirmation ###
 summary_and_confirm() {
