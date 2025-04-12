@@ -706,10 +706,20 @@ run_bootloader() {
         if is_uefi_system; then
             log "[RUN_BOOTLOADER] UEFI system detected. Installing GRUB with EFI support on $disk..."
 
-            # Проверка, что EFI-путь смонтирован
-            if [ ! -d /boot/efi ]; then
-                log_error "[RUN_BOOTLOADER] EFI directory /boot/efi not mounted. Exiting."
-                exit 1
+            # Если каталог /boot/efi не смонтирован, пытаемся его смонтировать
+            if ! mountpoint -q /boot/efi; then
+                log_error "[RUN_BOOTLOADER] EFI directory /boot/efi not mounted. Attempting to auto-mount..."
+                # Автоопределяем EFI-раздел (предполагается, что он имеет FSTYPE vfat)
+                efi_parts=($(lsblk -o NAME,FSTYPE -nr | awk '$2=="vfat"{print $1}'))
+                if [ ${#efi_parts[@]} -eq 1 ]; then
+                    EFI_DEVICE="/dev/${efi_parts[0]}"
+                    log "[RUN_BOOTLOADER] Auto-detected EFI partition: $EFI_DEVICE. Mounting to /boot/efi..."
+                    mkdir -p /boot/efi
+                    mount "$EFI_DEVICE" /boot/efi || { log_error "[RUN_BOOTLOADER] Failed to mount $EFI_DEVICE to /boot/efi. Exiting."; exit 1; }
+                else
+                    log_error "[RUN_BOOTLOADER] Unable to auto-detect EFI partition. Please mount /boot/efi manually or define EFI_DEVICE. Exiting."
+                    exit 1
+                fi
             fi
 
             # Установка grub-efi-amd64, если не установлен
@@ -752,6 +762,7 @@ run_bootloader() {
 
     log "[RUN_BOOTLOADER] Bootloader installation complete."
 }
+
 
 
 run_initial_config() {
