@@ -40,7 +40,7 @@ if [ "$1" == "c" ];then
     rm -rf /mnt/md0p3
 
     #clear raid install step
-    mdadm --stop /dev/md0*
+    mdadm --stop /dev/md0p*
     wipefs -a /dev/nvme{0,1}n1
     mdadm --detail --scan >> /etc/mdadm/mdadm.conf
 
@@ -459,7 +459,6 @@ configure_network() {
     NETWORK_DNS="${dns:-"8.8.8.8"}"
 }
 
-# Дополненная функция конфигурации загрузчика
 configure_bootloader() {
     log "[CONFIGURE_BOOTLOADER] [Configuring] Bootloader parameters"
     # Если переменная GRUB_TARGET_DRIVES не задана,
