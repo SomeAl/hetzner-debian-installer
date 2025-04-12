@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash  
 LOG_FILE="error.log"
 
 exec 3>&1 4>&2  
