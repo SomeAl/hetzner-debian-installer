@@ -69,20 +69,11 @@ screen -S "$STY" -X sessionname "$SESSION_NAME"
 
 # функции логирования
 log() {
-    echo "[INFO] $@" | tee /dev/fd/3
+    echo "$(date "+%Y-%m-%d %H:%M") [INFO] $@" | tee /dev/fd/3
 }
 
 log_error() {
-    echo "[ERROR] $@" | tee /dev/fd/3 >&2
-}
-
-# функции логирования
-log() {
-    echo "[INFO] $@" | tee /dev/fd/3
-}
-
-log_error() {
-    echo "[ERROR] $@" | tee /dev/fd/3 >&2
+    echo -e "$(date "+%Y-%m-%d %H:%M") \033[0;31m[ERROR]\033[0m $@" | tee /dev/fd/3 >&2
 }
 
 find_disks() {
@@ -102,14 +93,14 @@ validate_size() {
 validate_mount_point() {
     local mount_point=$1
     if [ -z "$mount_point" ]; then
-        echo "Error: Mount point cannot be empty. Exiting." >&2
+        log_error " Mount point cannot be empty. Exiting." >&2
         exit 1
     fi
 
     if [ ! -d "$mount_point" ]; then
-        echo "Warning: Mount point '$mount_point' does not exist. Creating it..."
-        mkdir -p "$mount_point" || { echo "Error: Failed to create $mount_point. Exiting."; exit 1; }
-        echo "Successfully created: $mount_point"
+        log "Warning: Mount point '$mount_point' does not exist. Creating it..."
+        mkdir -p "$mount_point" || { log_error " Failed to create $mount_point. Exiting."; exit 1; }
+        log "Successfully created: $mount_point"
     fi
 }
 
@@ -117,13 +108,13 @@ validate_mount_point() {
 ensure_unmounted() {
     local mount_point=$1
     if findmnt -r "$mount_point" >/dev/null 2>&1; then
-        echo "Warning: $mount_point is currently mounted."
+        log "Warning: $mount_point is currently mounted."
         read -rp "Do you want to unmount it? (y/N): " confirm
         if [[ "$confirm" =~ ^[Yy]$ ]]; then
-            umount -l "$mount_point" || { echo "Error: Failed to unmount $mount_point. Exiting."; exit 1; }
-            echo "Unmounted: $mount_point"
+            umount -l "$mount_point" || { log_error " Failed to unmount $mount_point. Exiting."; exit 1; }
+            log "Unmounted: $mount_point"
         else
-            echo "Error: Installation cannot proceed with mounted target. Exiting."
+            log_error " Installation cannot proceed with mounted target. Exiting."
             exit 1
         fi
     fi
@@ -133,14 +124,14 @@ ensure_unmounted() {
 validate_mount_point() {
     local mount_point=$1
     if [ -z "$mount_point" ]; then
-        echo "Error: Mount point cannot be empty. Exiting." >&2
+        log_error " Mount point cannot be empty. Exiting." >&2
         exit 1
     fi
 
     if [ ! -d "$mount_point" ]; then
-        echo "Warning: Mount point '$mount_point' does not exist. Creating it..."
-        mkdir -p "$mount_point" || { echo "Error: Failed to create $mount_point. Exiting."; exit 1; }
-        echo "Successfully created: $mount_point"
+        log "Warning: Mount point '$mount_point' does not exist. Creating it..."
+        mkdir -p "$mount_point" || { log_error " Failed to create $mount_point. Exiting."; exit 1; }
+        log "Successfully created: $mount_point"
     fi
 }
 
@@ -148,13 +139,13 @@ validate_mount_point() {
 ensure_unmounted() {
     local mount_point=$1
     if findmnt -r "$mount_point" >/dev/null 2>&1; then
-        echo "Warning: $mount_point is currently mounted."
+        log "Warning: $mount_point is currently mounted."
         read -rp "Do you want to unmount it? (y/N): " confirm
         if [[ "$confirm" =~ ^[Yy]$ ]]; then
-            umount -l "$mount_point" || { echo "Error: Failed to unmount $mount_point. Exiting."; exit 1; }
-            echo "Unmounted: $mount_point"
+            umount -l "$mount_point" || { log_error " Failed to unmount $mount_point. Exiting."; exit 1; }
+            log "Unmounted: $mount_point"
         else
-            echo "Error: Installation cannot proceed with mounted target. Exiting."
+            log_error " Installation cannot proceed with mounted target. Exiting."
             exit 1
         fi
     fi
@@ -213,25 +204,25 @@ validate_grub_config() {
 ### CONFIGURE FUNCTIONS ###
 
 configure_partitioning() {
-    echo "[Configuring] Partitioning parameters..."
+    log "[Configuring] Partitioning parameters..."
 
     available_disks=( $(find_disks) )
     if [ ${#available_disks[@]} -eq 0 ]; then
-        echo "No disks found. Exiting..."
+        log "No disks found. Exiting..."
         exit 1
     fi
 
-    echo "Detected disks:"
+    log "Detected disks:"
     for disk in "${available_disks[@]}"; do
         size=$(lsblk -dnbo SIZE "$disk" | awk '{printf "%.1f GB", $1/1024/1024/1024}')
-        echo "- $disk ($size)"
+        log "- $disk ($size)"
     done
     echo ""
 
     read -rp "Primary disk [${available_disks[0]}]: " PART_DRIVE1
     PART_DRIVE1="${PART_DRIVE1:-${available_disks[0]}}"
     if [ ! -b "$PART_DRIVE1" ]; then
-        echo "Error: $PART_DRIVE1 is not a valid block device. Exiting."
+        log_error " $PART_DRIVE1 is not a valid block device. Exiting."
         exit 1
     fi
 
@@ -239,14 +230,14 @@ configure_partitioning() {
         read -rp "Secondary disk for RAID (leave empty if none) [${available_disks[1]}]: " PART_DRIVE2
         PART_DRIVE2="${PART_DRIVE2:-${available_disks[1]}}"
         if [ ! -b "$PART_DRIVE2" ]; then
-            echo "Error: $PART_DRIVE2 is not a valid block device. Exiting."
+            log_error " $PART_DRIVE2 is not a valid block device. Exiting."
             exit 1
         fi
 
         read -rp "Use RAID? (yes/no) [yes]: " PART_USE_RAID
         PART_USE_RAID="${PART_USE_RAID:-yes}"
         if [[ "$PART_USE_RAID" != "yes" && "$PART_USE_RAID" != "no" ]]; then
-            echo "Invalid input for RAID option. Defaulting to 'yes'."
+            log_error "Invalid input for RAID option. Defaulting to 'yes'."
             PART_USE_RAID="yes"
         fi
 
@@ -254,7 +245,7 @@ configure_partitioning() {
             read -rp "RAID Level [1]: " PART_RAID_LEVEL
             PART_RAID_LEVEL="${PART_RAID_LEVEL:-1}"
             if ! [[ "$PART_RAID_LEVEL" =~ ^[0-9]+$ ]]; then
-                echo "Invalid RAID level. Defaulting to 1."
+                log_error "Invalid RAID level. Defaulting to 1."
                 PART_RAID_LEVEL="1"
             fi
         fi
@@ -264,7 +255,7 @@ configure_partitioning() {
     if [ -z "$PART_BOOT_SIZE" ]; then
         PART_BOOT_SIZE="512M"
     elif ! validate_size "$PART_BOOT_SIZE"; then
-        echo "Invalid boot partition size. Using default [512M]."
+        log_error "Invalid boot partition size. Using default [512M]."
         PART_BOOT_SIZE="512M"
     fi
 
@@ -272,7 +263,7 @@ configure_partitioning() {
     if [ -z "$PART_SWAP_SIZE" ]; then
         PART_SWAP_SIZE="32G"
     elif ! validate_size "$PART_SWAP_SIZE"; then
-        echo "Invalid swap partition size. Using default [32G]."
+        log_error "Invalid swap partition size. Using default [32G]."
         PART_SWAP_SIZE="32G"
     fi
 
@@ -288,7 +279,7 @@ configure_partitioning() {
         fi
     done
     if [ "$valid_root_fs" = "no" ]; then
-        echo "Invalid root filesystem type. Defaulting to ext4."
+        log_error "Invalid root filesystem type. Defaulting to ext4."
         PART_ROOT_FS="ext4"
     fi
 
@@ -304,17 +295,17 @@ configure_partitioning() {
         fi
     done
     if [ "$valid_boot_fs" = "no" ]; then
-        echo "Invalid boot filesystem type. Defaulting to ext3."
+        log_error "Invalid boot filesystem type. Defaulting to ext3."
         PART_BOOT_FS="ext3"
     fi
 }
 
 configure_debian_install() {
-    echo "[Configuring] Debian installation parameters..."
+    log "[Configuring] Debian installation parameters..."
     
     # Проверка прав (не запущен ли скрипт без root)
     if [ "$(id -u)" -ne 0 ]; then
-        echo "Error: This script must be run as root!" >&2
+        log_error " This script must be run as root!" >&2
         exit 1
     fi
 
@@ -324,7 +315,7 @@ configure_debian_install() {
     case "$DEBIAN_RELEASE" in
         stable|testing|sid) ;;
         *)  
-            echo "Invalid Debian version input, defaulting to 'stable'."
+            log_error "Invalid Debian version input, defaulting to 'stable'."
             DEBIAN_RELEASE="stable"
             ;;
     esac
@@ -335,7 +326,7 @@ configure_debian_install() {
 
     # Проверка доступности репозитория (более надежный метод)
     if ! wget --spider -q "$DEBIAN_MIRROR/dists/$DEBIAN_RELEASE/Release"; then
-        echo "Error: Debian mirror '$DEBIAN_MIRROR' is not reachable. Exiting." >&2
+        log_error " Debian mirror '$DEBIAN_MIRROR' is not reachable. Exiting." 
         exit 1
     fi
 
@@ -348,19 +339,19 @@ configure_debian_install() {
 }
 
 configure_network() {
-    echo "[Configuring] Network settings..."
+    log "[Configuring] Network settings..."
 
     # Получаем список активных интерфейсов (кроме lo)
     AVAILABLE_IFACES=($(ip -o link show up | awk -F': ' '{print $2}' | grep -v lo))
 
     if [[ ${#AVAILABLE_IFACES[@]} -eq 0 ]]; then
-        echo "Error: No active network interfaces found." >&2
+        log_error " No active network interfaces found." 
         exit 1
     elif [[ ${#AVAILABLE_IFACES[@]} -eq 1 ]]; then
         NET_IFACE="${AVAILABLE_IFACES[0]}"
-        echo "Only one active interface detected: ${NET_IFACE}. Using it automatically."
+        log "Only one active interface detected: ${NET_IFACE}. Using it automatically."
     else
-        echo "Available network interfaces:"
+        log "Available network interfaces:"
         printf " - %s\n" "${AVAILABLE_IFACES[@]}"
         read -rp "Enter network interface to configure [${AVAILABLE_IFACES[0]}]: " NET_IFACE
         NET_IFACE="${NET_IFACE:-${AVAILABLE_IFACES[0]}}"
@@ -368,7 +359,7 @@ configure_network() {
 
     # Проверка существования интерфейса
     if ! ip link show "$NET_IFACE" &>/dev/null; then
-        echo "Error: Network interface '$NET_IFACE' not found. Exiting." >&2
+        log_error " Network interface '$NET_IFACE' not found. Exiting." >&2
         exit 1
     fi
 
@@ -378,21 +369,21 @@ configure_network() {
     NETWORK_USE_DHCP="${NETWORK_USE_DHCP:-yes}"
 
     if [[ "$NETWORK_USE_DHCP" != "no" ]]; then
-        echo "Using DHCP configuration for interface '$NET_IFACE'."
+        log "Using DHCP configuration for interface '$NET_IFACE'."
 
         # Проверка, работает ли DHCP на интерфейсе
-        echo "Testing DHCP availability on $NET_IFACE..."
+        log "Testing DHCP availability on $NET_IFACE..."
         if command -v dhclient &>/dev/null; then
             dhclient -1 -v "$NET_IFACE" &>/dev/null
             if [ $? -ne 0 ]; then
-                echo "Warning: Failed to obtain DHCP lease on '$NET_IFACE'."
+                log "Warning: Failed to obtain DHCP lease on '$NET_IFACE'."
                 read -rp "Continue anyway? (y/N): " confirm
                 [[ "$confirm" =~ ^[Yy]$ ]] || exit 1
             else
-                echo "DHCP lease successfully acquired."
+                log "DHCP lease successfully acquired."
             fi
         else
-            echo "Warning: dhclient not installed, skipping DHCP lease test."
+            log "Warning: dhclient not installed, skipping DHCP lease test."
         fi
 
         # Очистка переменных статической конфигурации
@@ -404,17 +395,17 @@ configure_network() {
         # 1. IP
         while true; do
             read -rp "Enter static IP address (e.g., 192.168.1.100): " ip
-            [[ -z "$ip" ]] && echo "Error: IP address is required." && continue
+            [[ -z "$ip" ]] && log_error " IP address is required." && continue
 
             if ! ipcalc "$ip" &>/dev/null && ! ip addr add "$ip"/32 dev "$NET_IFACE" &>/dev/null; then
-                echo "Error: Invalid IP format."
+                log_error " Invalid IP format."
                 continue
             fi
 
             # Проверка занятости IP
             if command -v arping &>/dev/null; then
                 if arping -D -I "$NET_IFACE" "$ip" -c 2 &>/dev/null; then
-                    echo "Warning: IP address $ip is already in use."
+                    log_error "Warning: IP address $ip is already in use."
                     read -rp "Continue anyway? (y/N): " confirm
                     [[ ! "$confirm" =~ ^[Yy]$ ]] && continue
                 fi
@@ -430,7 +421,7 @@ configure_network() {
             if command -v ipcalc &>/dev/null; then
                 netmask=$(ipcalc -m "$ip/$cidr" | awk -F'= ' '/Netmask/ {print $2}')
             else
-                echo "Warning: ipcalc not available to convert CIDR to netmask. Using default: $netmask"
+                log "Warning: ipcalc not available to convert CIDR to netmask. Using default: $netmask"
                 netmask="255.255.255.0"
             fi
         fi
@@ -438,19 +429,19 @@ configure_network() {
         # 3. Gateway
         while true; do
             read -rp "Enter gateway (e.g., 192.168.1.1): " gateway
-            [[ -z "$gateway" ]] && echo "Error: Gateway is required." && continue
+            [[ -z "$gateway" ]] && log_error " Gateway is required." && continue
 
             if [[ "$gateway" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
                 # Проверка пинга
                 if ping -c 1 -W 1 "$gateway" &>/dev/null; then
                     break
                 else
-                    echo "Warning: Gateway $gateway is not responding to ping."
+                    log "Warning: Gateway $gateway is not responding to ping."
                     read -rp "Continue anyway? (y/N): " confirm
                     [[ "$confirm" =~ ^[Yy]$ ]] && break
                 fi
             else
-                echo "Invalid gateway format."
+                log_error "Invalid gateway format."
             fi
         done
 
@@ -469,7 +460,7 @@ configure_network() {
 
 # Дополненная функция конфигурации загрузчика
 configure_bootloader() {
-    echo "[Configuring] Bootloader parameters"
+    log "[Configuring] Bootloader parameters"
     # Если переменная GRUB_TARGET_DRIVES не задана,
     # то в случае RAID используем оба диска, иначе – только основной диск.
     if [ -z "${GRUB_TARGET_DRIVES[*]}" ]; then
@@ -478,7 +469,7 @@ configure_bootloader() {
         else
             GRUB_TARGET_DRIVES=("$PART_DRIVE1")
         fi
-        echo "Default GRUB target drives set to: ${GRUB_TARGET_DRIVES[*]}"
+        log "Default GRUB target drives set to: ${GRUB_TARGET_DRIVES[*]}"
         read -rp "Press Enter to accept or type alternative (space-separated list): " -a user_drives
         if [ ${#user_drives[@]} -gt 0 ]; then
             GRUB_TARGET_DRIVES=("${user_drives[@]}")
@@ -510,11 +501,11 @@ configure_bootloader() {
         exit 1
     fi
     GRUB_TARGET_DRIVES=("${valid_drives[@]}")
-    echo "Final GRUB target drives: ${GRUB_TARGET_DRIVES[*]}"
+    log "Final GRUB target drives: ${GRUB_TARGET_DRIVES[*]}"
 }
 
 configure_initial_config() {
-    echo "[Configuring] Initial System Configuration"
+    log "[Configuring] Initial System Configuration"
     
     # Запрос имени хоста с дефолтом "debian-server"
     read -rp "Enter hostname [debian-server]: " input_hostname
@@ -541,15 +532,6 @@ configure_initial_config() {
     
     # Генерация SHA-512 хеша пароля
     SYSTEM_USER_PASSWORD_HASH=$(openssl passwd -6 "$user_password")
-    
-    # Сохранение параметров в конфигурационный файл
-    CONFIG_FILE_NAME="hetzner-debian-installer.conf.bash"
-    {
-        echo "SYSTEM_HOSTNAME=\"$SYSTEM_HOSTNAME\""
-        echo "SYSTEM_SUDO_USER=\"$SYSTEM_SUDO_USER\""
-        echo "SYSTEM_USER_PASSWORD_HASH=\"$SYSTEM_USER_PASSWORD_HASH\""
-    } > "$CONFIG_FILE_NAME"
-    echo "Configuration saved to $CONFIG_FILE_NAME"
 }
 
 configure_cleanup() {
@@ -564,10 +546,10 @@ configure_cleanup() {
 ### RUN FUNCTIONS ###
 
 run_partitioning() {
-    echo "[Running] Partitioning and RAID setup..."
+    log "[Running] Partitioning and RAID setup..."
 
     if [ "${PART_USE_RAID:-no}" = "yes" ] && [ -n "${PART_DRIVE2:-}" ]; then
-        echo "Creating RAID partitions on physical disks..."
+        log "Creating RAID partitions on physical disks..."
         for disk in "$PART_DRIVE1" "$PART_DRIVE2"; do
             parted -s "$disk" mklabel gpt
             parted -s "$disk" mkpart primary ext4 1MiB 100%
@@ -575,7 +557,7 @@ run_partitioning() {
 
         RAID_PART1="${PART_DRIVE1}p1"
         RAID_PART2="${PART_DRIVE2}p1"
-        echo "Creating RAID${PART_RAID_LEVEL} array on $RAID_PART1 and $RAID_PART2..."
+        log "Creating RAID${PART_RAID_LEVEL} array on $RAID_PART1 and $RAID_PART2..."
         mdadm --create --verbose /dev/md0 --level="$PART_RAID_LEVEL" --raid-devices=2 "$RAID_PART1" "$RAID_PART2"
         RAID_DEVICE="/dev/md0"
         sleep 5
@@ -583,36 +565,36 @@ run_partitioning() {
         RAID_DEVICE="$PART_DRIVE1"
     fi
 
-    echo "Partitioning RAID device $RAID_DEVICE..."
+    log "Partitioning RAID device $RAID_DEVICE..."
     parted -s "$RAID_DEVICE" mklabel gpt
     parted -s "$RAID_DEVICE" mkpart primary "$PART_BOOT_FS" 1MiB "$PART_BOOT_SIZE"
     parted -s "$RAID_DEVICE" mkpart primary linux-swap "$PART_BOOT_SIZE" "$PART_SWAP_SIZE"
     parted -s "$RAID_DEVICE" mkpart primary "$PART_ROOT_FS" "$PART_SWAP_SIZE" 100%
     sleep 2
 
-    echo "Formatting partitions on $RAID_DEVICE..."
+    log "Formatting partitions on $RAID_DEVICE..."
     mkfs."$PART_BOOT_FS" -F "${RAID_DEVICE}p1"
     mkswap "${RAID_DEVICE}p2"
     mkfs."$PART_ROOT_FS" -F "${RAID_DEVICE}p3"
 
-    echo "[Running] Partitioning and formatting complete."
+    log "[Running] Partitioning and formatting complete."
 }
 
 run_debian_install() {
-    echo "[Running] Installing Debian base system with debootstrap..."
+    log "[Running] Installing Debian base system with debootstrap..."
 
     # Проверка прав root
     if [ "$(id -u)" -ne 0 ]; then
-        echo "Error: This script must be run as root!" >&2
+        log_error " This script must be run as root!" >&2
         exit 1
     fi
 
     # Проверка точек монтирования
     for key in "${!MOUNT_POINTS[@]}"; do
         if [ ! -d "${MOUNT_POINTS[$key]}" ]; then
-            echo "Creating mount point: ${MOUNT_POINTS[$key]}..."
+            log "Creating mount point: ${MOUNT_POINTS[$key]}..."
             mkdir -p "${MOUNT_POINTS[$key]}" || {
-                echo "Error: Failed to create ${MOUNT_POINTS[$key]}. Exiting."
+                log_error " Failed to create ${MOUNT_POINTS[$key]}. Exiting."
                 exit 1
             }
         fi
@@ -621,7 +603,7 @@ run_debian_install() {
     # Монтирование ROOT
     if ! mountpoint -q "${MOUNT_POINTS[ROOT]}"; then
         validate_mount_point "${MOUNT_POINTS[ROOT]}"
-        echo "Mounting root partition (/dev/md0p3) to ${MOUNT_POINTS[ROOT]}..."
+        log "Mounting root partition (/dev/md0p3) to ${MOUNT_POINTS[ROOT]}..."
         mount "/dev/md0p3" "${MOUNT_POINTS[ROOT]}"
     fi
 
@@ -629,7 +611,7 @@ run_debian_install() {
     if [ -n "${MOUNT_POINTS[BOOT]}" ] && [ -d "${MOUNT_POINTS[BOOT]}" ]; then
         if ! mountpoint -q "${MOUNT_POINTS[BOOT]}"; then
             validate_mount_point "${MOUNT_POINTS[BOOT]}"
-            echo "Mounting boot partition (/dev/md0p1) to ${MOUNT_POINTS[BOOT]}..."
+            log "Mounting boot partition (/dev/md0p1) to ${MOUNT_POINTS[BOOT]}..."
             mount "/dev/md0p1" "${MOUNT_POINTS[BOOT]}"
         fi
     fi
@@ -638,16 +620,16 @@ run_debian_install() {
     if [ -n "${MOUNT_POINTS[SWAP]}" ] && [ -d "${MOUNT_POINTS[SWAP]}" ]; then
         if ! swapon --show | grep -q "${MOUNT_POINTS[SWAP]}"; then
             validate_mount_point "${MOUNT_POINTS[SWAP]}"
-            echo "Activating swap partition (/dev/md0p2)..."
+            log "Activating swap partition (/dev/md0p2)..."
             swapon "/dev/md0p2"
         fi
     fi
 
     # debootstrap
-    echo "Starting debootstrap for Debian $DEBIAN_RELEASE using mirror $DEBIAN_MIRROR..."
+    log "Starting debootstrap for Debian $DEBIAN_RELEASE using mirror $DEBIAN_MIRROR..."
     debootstrap --arch=amd64 "$DEBIAN_RELEASE" "${MOUNT_POINTS[ROOT]}" "$DEBIAN_MIRROR"
     if [ $? -ne 0 ]; then
-        echo "Error: debootstrap failed. Exiting."
+        log_error " debootstrap failed. Exiting."
         exit 1
     fi
 
@@ -659,11 +641,11 @@ run_debian_install() {
     mount --make-rslave "${MOUNT_POINTS[ROOT]}/dev"
     cp /etc/resolv.conf "${MOUNT_POINTS[ROOT]}/etc/"
 
-    echo "Generating /etc/fstab..."
+    log "Generating /etc/fstab..."
     gen_fstab "${MOUNT_POINTS[ROOT]}"
 
-    echo "Debian base system installed successfully in ${MOUNT_POINTS[ROOT]}."
-    echo "You can now chroot into the system for further configuration."
+    log "Debian base system installed successfully in ${MOUNT_POINTS[ROOT]}."
+    log "You can now chroot into the system for further configuration."
 }
 
 run_network() {
@@ -743,39 +725,39 @@ run_bootloader() {
 }
 
 run_initial_config() {
-    echo "[Running] Applying initial system configuration..."
+    log "[Running] Applying initial system configuration..."
     
     # Установка hostname
-    echo "$SYSTEM_HOSTNAME" > /etc/hostname
-    echo "Hostname set to $SYSTEM_HOSTNAME"
+    log "$SYSTEM_HOSTNAME" > /etc/hostname
+    log "Hostname set to $SYSTEM_HOSTNAME"
     
     # Создание нового пользователя с домашней директорией и bash в качестве оболочки
     if id "$SYSTEM_SUDO_USER" &>/dev/null; then
-        echo "User $SYSTEM_SUDO_USER already exists, skipping creation."
+        log "User $SYSTEM_SUDO_USER already exists, skipping creation."
     else
         useradd -m -s /bin/bash "$SYSTEM_SUDO_USER"
-        echo "User $SYSTEM_SUDO_USER created."
+        log "User $SYSTEM_SUDO_USER created."
     fi
 
     # Установка хешированного пароля для созданного пользователя
-    echo "$SYSTEM_SUDO_USER:$SYSTEM_USER_PASSWORD_HASH" | chpasswd -e
-    echo "Password for $SYSTEM_SUDO_USER set (using hash)."
+    log "$SYSTEM_SUDO_USER:$SYSTEM_USER_PASSWORD_HASH" | chpasswd -e
+    log "Password for $SYSTEM_SUDO_USER set (using hash)."
 
     # Добавление пользователя в группу sudo
     usermod -aG sudo "$SYSTEM_SUDO_USER"
-    echo "User $SYSTEM_SUDO_USER added to sudo group."
+    log "User $SYSTEM_SUDO_USER added to sudo group."
 
     # Отключение возможности входа по SSH через учетную запись root
     if grep -q "^PermitRootLogin yes" /etc/ssh/sshd_config; then
         sed -i 's/^PermitRootLogin yes/PermitRootLogin no/' /etc/ssh/sshd_config
-        echo "Root login via SSH has been disabled."
+        log "Root login via SSH has been disabled."
     else
-        echo "PermitRootLogin already disabled or not set."
+        log "PermitRootLogin already disabled or not set."
     fi
 
     # Перезапуск сервиса SSH для применения изменений
     systemctl restart sshd
-    echo "SSH service restarted."
+    log "SSH service restarted."
 }
 run_cleanup() {
     log "[Running] Final cleanup: unmounting file systems, cleaning temporary data and rebooting system."
@@ -847,11 +829,11 @@ summary_and_confirm() {
         if [ "$RESTART_CONFIGURATION" == "yes" ];then 
             configuring
         else
-            echo "Installation aborted by user."
+            log "Installation aborted by user."
             exit 1
         fi
     else
-        echo "Installation aborted by user."
+        log "Installation aborted by user."
         exit 1
     fi
 }
@@ -887,10 +869,12 @@ save_configuration() {
         "GRUB_TARGET_DRIVES=${GRUB_TARGET_DRIVES[*]}"
         ""
         "# System settings"
-        "HOSTNAME=${HOSTNAME}"
+        "SYSTEM_HOSTNAME=${SYSTEM_HOSTNAME}"
+        "SYSTEM_SUDO_USER=${SYSTEM_SUDO_USER}"
+        "SYSTEM_USER_PASSWORD_HASH=${SYSTEM_USER_PASSWORD_HASH}"
     )
     printf "%s\n" "${CONFIG_LINES[@]}" > "$CONFIG_FILE"
-    echo "Configuration saved to $CONFIG_FILE"
+    log "Configuration saved to $CONFIG_FILE"
     echo ""
 }
 
@@ -916,12 +900,12 @@ running() {
 
 # Load config file if exists
 if [ -f "$CONFIG_FILE" ]; then
-    echo "Loading configuration from $CONFIG_FILE"
+    log "Loading configuration from $CONFIG_FILE"
     source "$CONFIG_FILE"
     summary_and_confirm
     running
 else
-    echo "No configuration file found, proceeding interactively."
+    log "No configuration file found, proceeding interactively."
 fi
 
 main() {
