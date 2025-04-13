@@ -88,11 +88,11 @@ set -eo pipefail
 
 # функции логирования
 log() {
-    echo "$(date "+%Y-%m-%d %H:%M") [INFO] $@" | tee /dev/fd/3
+    echo "$(date "+%Y-%m-%d %H:%M") [INFO] $@" 
 }
 
 log_error() {
-    echo -e "$(date "+%Y-%m-%d %H:%M") \033[0;31m[ERROR]\033[0m $@" | tee /dev/fd/3 >&2
+    echo -e "$(date "+%Y-%m-%d %H:%M") \033[0;31m[ERROR]\033[0m $@" 
 }
 
 find_disks() {
