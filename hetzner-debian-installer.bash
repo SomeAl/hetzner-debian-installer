@@ -819,7 +819,7 @@ summary_and_confirm() {
     echo "Root filesystem:       $PART_ROOT_FS"
     echo "Debian release/mirror: $DEBIAN_RELEASE / $DEBIAN_MIRROR"
     echo "Use DHCP:              $NETWORK_USE_DHCP"
-    echo "GRUB targets:          ${GRUB_TARGET_DRIVES[*]}"
+    echo "GRUB targets:          ${GRUB_TARGET_DRIVES}"
     echo "Hostname:              $HOSTNAME"
     echo "----------------------------------------"
     read -rp "Start installation with these settings? (yes/no)[no]: " CONFIRM
@@ -875,7 +875,7 @@ save_configuration() {
         "NETWORK_DNS=${NETWORK_DNS}"
         ""
         "# Bootloader"
-        "GRUB_TARGET_DRIVES=${GRUB_TARGET_DRIVES[*]}"
+        "GRUB_TARGET_DRIVES=${GRUB_TARGET_DRIVES}"
         ""
         "# System settings"
         "SYSTEM_HOSTNAME=${SYSTEM_HOSTNAME}"
