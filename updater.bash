@@ -1,9 +1,9 @@
 #!/bin/bash
 
 # === Настройки ===
-REPO_DIR="/root/hetzner-debian-installer"  # Укажите путь к локальному репозиторию
-BRANCH="main"                  # Ветка, за которой следить
-GIT_REMOTE="origin"            # Удаленный репозиторий
+REPO_DIR="/root/hetzner-debian-installer"  # Путь к локальному репозиторию
+BRANCH="main"                             # Ветка, за которой следить
+GIT_REMOTE="origin"                       # Удалённый репозиторий
 
 # === Функция обновления репозитория ===
 update_repo() {
@@ -22,19 +22,23 @@ update_repo() {
         echo "Сброс локальных изменений..."
         git reset --hard "$GIT_REMOTE/$BRANCH"
 
-        echo "Обновляем данные из удаленного репозитория..."
+        echo "Обновляем данные из удалённого репозитория..."
         git fetch --all
         git reset --hard "$GIT_REMOTE/$BRANCH"
         git pull --force "$GIT_REMOTE" "$BRANCH"
 
         echo "Обновление завершено."
-        chmod -R +x "$REPO_DIR/*.bash"
+
+        # Включаем nullglob, чтобы избежать ошибки, если нет файлов с расширением .bash
+        shopt -s nullglob
+        chmod -R +x "$REPO_DIR"/*.bash
+        shopt -u nullglob
     else
         echo "Нет новых изменений."
     fi
 }
 
-# === Основной цикл ===
+# === Основной цикл проверки обновлений ===
 while true; do
     update_repo
     sleep 30  # Проверять каждые 30 секунд (можно изменить)

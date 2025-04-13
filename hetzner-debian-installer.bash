@@ -821,8 +821,6 @@ run_bootloader() {
     log "[RUN_BOOTLOADER] Bootloader installation complete."
 }
 
-
-
 run_initial_config() {
     log "[Running] Applying initial system configuration..."
     
@@ -895,6 +893,26 @@ run_cleanup() {
     log "Cleanup completed. System will reboot in 10 seconds..."
     sleep 10
     run_cmd reboot
+}
+
+run_in_chroot() {
+    # После run_network, добавьте этот блок:
+    TARGET="${MOUNT_POINTS[ROOT]}"
+
+    # Копируем основной скрипт в целевую систему (например, в /usr/local/bin)
+    cp "$0" "$TARGET/usr/local/bin/install.sh" || {
+        log_error "Failed to copy script into target system."
+        exit 1
+    }
+
+    # Также копируем файл конфигурации, если он требуется:
+    if [ -f "$CONFIG_FILE" ]; then
+        cp "$CONFIG_FILE" "$TARGET/etc/"
+    fi
+
+    # Запускаем скрипт внутри chroot с дополнительным параметром, например "secondstep"
+    log "Entering chroot and executing second step..."
+    env LANG=C HOME=/root chroot "$TARGET" /bin/bash /usr/local/bin/install.sh secondstep
 }
 
 ################################################################################################################################################
@@ -990,13 +1008,20 @@ configuring() {
     configure_cleanup
 }
 
+if [ "$1" = "secondstep" ]; then
+    # Выполнение функций run_bootloader, run_initial_config и run_cleanup
+    run_bootloader
+    run_initial_config
+    run_cleanup
+    exit 0
+fi
+
+
 running() {
     run_partitioning
     run_debian_install
     run_network
-    run_bootloader
-    run_initial_config
-    run_cleanup
+    run_in_chroot
 }
 
 # Load config file if exists
