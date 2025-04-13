@@ -103,6 +103,8 @@ fi
 # Переименование screen-сессии, если она уже запущена
 screen -S "$STY" -X sessionname "$SESSION_NAME"
 
+screen -r $SESSION_NAME
+
 ################################################################################################################################################
 ### HELPER FUNCTIONS ###
 
@@ -1026,9 +1028,9 @@ fi
 
 
 running() {
-    run_partitioning
-    run_debian_install
-    run_network
+    #run_partitioning
+    #run_debian_install
+    #run_network
     run_in_chroot
 }
 
