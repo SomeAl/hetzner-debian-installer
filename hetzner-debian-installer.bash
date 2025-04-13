@@ -590,7 +590,9 @@ run_partitioning() {
         RAID_PART1="${PART_DRIVE1}p1"
         RAID_PART2="${PART_DRIVE2}p1"
         log "Creating RAID${PART_RAID_LEVEL} array on $RAID_PART1 and $RAID_PART2..."
-        mdadm --create --verbose /dev/md0 --level="$PART_RAID_LEVEL" --raid-devices=2 "$RAID_PART1" "$RAID_PART2"
+        mdadm --create --verbose /dev/md0 --level="$PART_RAID_LEVEL" --raid-devices=2 "$RAID_PART1" "$RAID_PART2"<<!
+y
+!
         RAID_DEVICE="/dev/md0"
         sleep 5
     else
