@@ -482,6 +482,7 @@ configure_bootloader() {
     if [ -z "${GRUB_TARGET_DRIVES}" ]; then
         if [ "${PART_USE_RAID:-no}" = "yes" ]; then
             GRUB_TARGET_DRIVES="/dev/md0p1"
+            GRUB_TARGET_DRIVES="/dev/md0p1"
         else
             GRUB_TARGET_DRIVES="$PART_DRIVE1"
         fi
@@ -695,6 +696,12 @@ run_bootloader() {
                             --recheck \
                             --no-nvram \
                             --removable
+            grub-install --target=x86_64-efi \
+                            --efi-directory=/boot/efi \
+                            --bootloader-id=debian \
+                            --recheck \
+                            --no-nvram \
+                            --removable
 
         else
             # Если загрузочный раздел не отформатирован как vfat, переходим в BIOS-режим
@@ -712,7 +719,28 @@ run_bootloader() {
                         --recheck \
                         "$GRUB_TARGET_DRIVES"
     fi
+        else
+            # Если загрузочный раздел не отформатирован как vfat, переходим в BIOS-режим
+            log "[RUN_BOOTLOADER] UEFI system detected but boot filesystem is '$PART_BOOT_FS' (expected 'vfat')."
+            log "[RUN_BOOTLOADER] Falling back to BIOS installation on $GRUB_TARGET_DRIVES..."
+            grub-install --target=i386-pc \
+                            --boot-directory=/boot \
+                            --recheck \
+                            "$GRUB_TARGET_DRIVES"
+        fi
+    else
+        log "[RUN_BOOTLOADER] BIOS system detected. Installing GRUB on $GRUB_TARGET_DRIVES..."
+        grub-install --target=i386-pc \
+                        --boot-directory=/boot \
+                        --recheck \
+                        "$GRUB_TARGET_DRIVES"
+    fi
 
+    if [ $? -ne 0 ]; then
+        log_error "[RUN_BOOTLOADER] Error installing GRUB on $GRUB_TARGET_DRIVES"
+        exit 1
+    fi
+    
     if [ $? -ne 0 ]; then
         log_error "[RUN_BOOTLOADER] Error installing GRUB on $GRUB_TARGET_DRIVES"
         exit 1
