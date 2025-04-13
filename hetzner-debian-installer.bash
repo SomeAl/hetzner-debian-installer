@@ -87,7 +87,12 @@ set -eo pipefail
 if [ -z "$STY" ]; then
     if ! command -v screen &>/dev/null; then
         echo "Installing screen..."
-        apt update && apt install screen -y
+        apt update && apt install -y screen
+        # Проверяем, установился ли screen
+        if ! command -v screen &>/dev/null; then
+            echo "Error: screen still not found after installation. Exiting." >&2
+            exit 1
+        fi
     fi
     echo "Launching installation inside screen session '$SESSION_NAME'..."
     screen -dmS "$SESSION_NAME" bash "$0"
@@ -95,6 +100,7 @@ if [ -z "$STY" ]; then
     exit 0
 fi
 
+# Переименование screen-сессии, если она уже запущена
 screen -S "$STY" -X sessionname "$SESSION_NAME"
 
 ################################################################################################################################################
