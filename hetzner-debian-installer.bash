@@ -8,7 +8,7 @@ exec > >(tee -a $LOG_FILE) 2> >(tee -a $LOG_FILE >&4)
 (set -x; exec 2> >(tee -a $LOG_FILE >&4))
 
 
-CONFIG_FILE="env.conf"
+CONFIG_FILE="config"
 SESSION_NAME="debian_install"
 # Массив точек монтирования
 declare -A MOUNT_POINTS
@@ -888,19 +888,19 @@ run_in_chroot() {
     TARGET="${MOUNT_POINTS[ROOT]}"
 
     # Копируем основной скрипт в целевую систему (например, в /usr/local/bin)
-    cp "$0" "$TARGET/usr/local/bin/install.sh" || {
+    cp "$0" "$TARGET/root/install.sh" || {
         log_error "Failed to copy script into target system."
         exit 1
     }
 
     # Также копируем файл конфигурации, если он требуется:
     if [ -f "$CONFIG_FILE" ]; then
-        cp "$CONFIG_FILE" "$TARGET/etc/"
+        cp "$CONFIG_FILE" "$TARGET/root/"
     fi
 
     # Запускаем скрипт внутри chroot с дополнительным параметром, например "secondstep"
     log "Entering chroot and executing second step..."
-    env LANG=C HOME=/root chroot "$TARGET" /bin/bash /usr/local/bin/install.sh secondstep
+    env LANG=C HOME=/root chroot "$TARGET" /bin/bash /root/install.sh secondstep
 }
 
 ################################################################################################################################################
@@ -923,7 +923,7 @@ summary_and_confirm() {
     read -rp "Start installation with these settings? (yes/no)[no]: " CONFIRM
     CONFIRM=${CONFIRM:-no}
     if [ "$CONFIRM" == "yes" ]; then
-        read -rp "Do you want to save the configuration? (yes/no) [yes]: " SAVE_CONFIG
+        #read -rp "Do you want to save the configuration? (yes/no) [yes]: " SAVE_CONFIG
         SAVE_CONFIG=${SAVE_CONFIG:-yes}
         if [ "$SAVE_CONFIG" == "yes" ]; then
             save_configuration
@@ -1005,6 +1005,8 @@ running() {
 
 if [ "$1" = "secondstep" ]; then
     # Выполнение функций run_bootloader, run_initial_config и run_cleanup
+    log "Loading configuration from $CONFIG_FILE"
+    source "$CONFIG_FILE"
     run_bootloader
     run_initial_config
     run_cleanup
