@@ -68,7 +68,6 @@ if [ "$1" == "c" ]; then
     for dev in /dev/nvme{0,1}n1 /dev/md0p*; do
         if [ -b "$dev" ]; then
             wipefs -a "$dev" 2>/dev/null || true
-            dd if=/dev/zero of="$dev" bs=1M count=100 2>/dev/null || true
         fi
     done
 
@@ -796,8 +795,6 @@ run_bootloader() {
     log "[RUN_BOOTLOADER] Bootloader installation complete."
 }
 
-
-
 run_initial_config() {
     log "[Running] Applying initial system configuration..."
     
@@ -833,6 +830,7 @@ run_initial_config() {
     systemctl restart sshd
     log "SSH service restarted."
 }
+
 run_cleanup() {
     log "[Running] Final cleanup: unmounting file systems, cleaning temporary data and rebooting system."
 
@@ -870,6 +868,7 @@ run_cleanup() {
     sleep 10
     run_cmd reboot
 }
+
 ################################################################################################################################################
 ### Summary and Confirmation ###
 summary_and_confirm() {
