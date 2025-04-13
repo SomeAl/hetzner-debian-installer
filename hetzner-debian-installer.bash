@@ -689,7 +689,7 @@ run_bootloader() {
     grub-install --target=i386-pc \
                     --boot-directory=/boot \
                     --recheck \
-                    "$GRUB_TARGET_DRIVES"
+                    "${GRUB_TARGET_DRIVES}"
 
     if [ $? -ne 0 ]; then
         log_error "[RUN_BOOTLOADER] Error installing GRUB on $GRUB_TARGET_DRIVES"
