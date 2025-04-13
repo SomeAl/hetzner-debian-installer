@@ -681,7 +681,6 @@ run_network() {
 run_bootloader() {
     log "[RUN_BOOTLOADER] Running Bootloader installation..."
 
-    
     log "[RUN_BOOTLOADER] Download GRUB on $GRUB_TARGET_DRIVES..."
     apt install --no-install-recommends grub-pc -y
     
@@ -689,7 +688,7 @@ run_bootloader() {
     grub-install --target=i386-pc \
                     --boot-directory=/boot \
                     --recheck \
-                    "${GRUB_TARGET_DRIVES}"
+                    "/dev/md0p1"
 
     if [ $? -ne 0 ]; then
         log_error "[RUN_BOOTLOADER] Error installing GRUB on $GRUB_TARGET_DRIVES"
