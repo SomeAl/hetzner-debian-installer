@@ -479,47 +479,16 @@ configure_network() {
 
 configure_bootloader() {
     log "[CONFIGURE_BOOTLOADER] [Configuring] Bootloader parameters"
-    # Если переменная GRUB_TARGET_DRIVES не задана,
-    # то в случае RAID используем оба диска, иначе – только основной диск.
-    if [ -z "${GRUB_TARGET_DRIVES[*]}" ]; then
+    if [ -z "${GRUB_TARGET_DRIVES}" ]; then
         if [ "${PART_USE_RAID:-no}" = "yes" ]; then
-            GRUB_TARGET_DRIVES=("${MOUNT_POINTS["BOOT"]}")
+            GRUB_TARGET_DRIVES="${MOUNT_POINTS["BOOT"]}"
         else
-            GRUB_TARGET_DRIVES=("$PART_DRIVE1")
+            GRUB_TARGET_DRIVES="$PART_DRIVE1"
         fi
-        log "[CONFIGURE_BOOTLOADER] Default GRUB target drives set to: ${GRUB_TARGET_DRIVES[*]}"
-        read -rp "Press Enter to accept or type alternative (space-separated list): " -a user_drives
-        if [ ${#user_drives[@]} -gt 0 ]; then
-            GRUB_TARGET_DRIVES=("${user_drives[@]}")
-        fi
+        log "[CONFIGURE_BOOTLOADER] Default GRUB target drives set to: ${GRUB_TARGET_DRIVES}"
     fi
 
-    # Валидация каждого указанного диска
-    local valid_drives=()
-    for disk in "${GRUB_TARGET_DRIVES[@]}"; do
-        while true; do
-            if device_exists "$disk"; then
-                log "Disk $disk found."
-                valid_drives+=("$disk")
-                break
-            else
-                log_error "[CONFIGURE_BOOTLOADER] Disk $disk not found or is not a block device."
-                read -rp "Enter a correct device for '$disk' or press Enter to skip: " newdisk
-                if [ -z "$newdisk" ]; then
-                    log_error "[CONFIGURE_BOOTLOADER] Skipping device $disk (this may affect boot reliability)."
-                    break
-                else
-                    disk="$newdisk"
-                fi
-            fi
-        done
-    done
-    if [ ${#valid_drives[@]} -eq 0 ]; then
-        log_error "No valid GRUB target drives found. Exiting."
-        exit 1
-    fi
-    GRUB_TARGET_DRIVES=("${valid_drives[@]}")
-    log "Final GRUB target drives: ${GRUB_TARGET_DRIVES[*]}"
+    log "Final GRUB target drives: ${GRUB_TARGET_DRIVES}"
 }
 
 configure_initial_config() {
