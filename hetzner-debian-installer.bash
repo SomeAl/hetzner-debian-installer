@@ -997,9 +997,9 @@ configuring() {
 }
 
 running() {
-    #run_partitioning
-    #run_debian_install
-    #run_network
+    run_partitioning
+    run_debian_install
+    run_network
     run_in_chroot
 }
 
