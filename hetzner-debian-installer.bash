@@ -1006,7 +1006,7 @@ running() {
 if [ "$1" = "secondstep" ]; then
     # Выполнение функций run_bootloader, run_initial_config и run_cleanup
     log "Loading configuration from $CONFIG_FILE"
-    source "${MOUNT_POINTS[ROOT]}/root/$CONFIG_FILE"
+    source "/root/$CONFIG_FILE"
     run_bootloader
     run_initial_config
     run_cleanup
