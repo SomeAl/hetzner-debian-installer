@@ -683,35 +683,20 @@ run_bootloader() {
     log "[RUN_BOOTLOADER] Running Bootloader installation..."
 
     if is_uefi_system; then
-            log "[RUN_BOOTLOADER] UEFI system detected and boot filesystem is vfat. Installing GRUB with EFI support on $GRUB_TARGET_DRIVES..."
-            # Если grub-efi не установлен, пытаемся его установить.
-            if ! grub-install --version | grep -q 'x86_64-efi'; then
-                log "[RUN_BOOTLOADER] grub-efi-amd64 not detected. Attempting to install..."
-                apt-get update && apt-get install -y grub-efi-amd64
-            fi
-
-            grub-install --target=x86_64-efi \
-                            --efi-directory=/boot/efi \
-                            --bootloader-id=debian \
-                            --recheck \
-                            --no-nvram \
-                            --removable
-            grub-install --target=x86_64-efi \
-                            --efi-directory=/boot/efi \
-                            --bootloader-id=debian \
-                            --recheck \
-                            --no-nvram \
-                            --removable
-
-        else
-            # Если загрузочный раздел не отформатирован как vfat, переходим в BIOS-режим
-            log "[RUN_BOOTLOADER] UEFI system detected but boot filesystem is '$PART_BOOT_FS' (expected 'vfat')."
-            log "[RUN_BOOTLOADER] Falling back to BIOS installation on $GRUB_TARGET_DRIVES..."
-            grub-install --target=i386-pc \
-                            --boot-directory=/boot \
-                            --recheck \
-                            "$GRUB_TARGET_DRIVES"
+        log "[RUN_BOOTLOADER] UEFI system detected and boot filesystem is vfat. Installing GRUB with EFI support on $GRUB_TARGET_DRIVES..."
+        # Если grub-efi не установлен, пытаемся его установить.
+        if ! grub-install --version | grep -q 'x86_64-efi'; then
+            log "[RUN_BOOTLOADER] grub-efi-amd64 not detected. Attempting to install..."
+            apt-get update && apt-get install -y grub-efi-amd64
         fi
+
+        grub-install --target=x86_64-efi \
+                        --efi-directory=/boot/efi \
+                        --bootloader-id=debian \
+                        --recheck \
+                        --no-nvram \
+                        --removable
+
     else
         log "[RUN_BOOTLOADER] BIOS system detected. Installing GRUB on $GRUB_TARGET_DRIVES..."
         grub-install --target=i386-pc \
@@ -719,32 +704,13 @@ run_bootloader() {
                         --recheck \
                         "$GRUB_TARGET_DRIVES"
     fi
-        else
-            # Если загрузочный раздел не отформатирован как vfat, переходим в BIOS-режим
-            log "[RUN_BOOTLOADER] UEFI system detected but boot filesystem is '$PART_BOOT_FS' (expected 'vfat')."
-            log "[RUN_BOOTLOADER] Falling back to BIOS installation on $GRUB_TARGET_DRIVES..."
-            grub-install --target=i386-pc \
-                            --boot-directory=/boot \
-                            --recheck \
-                            "$GRUB_TARGET_DRIVES"
-        fi
-    else
-        log "[RUN_BOOTLOADER] BIOS system detected. Installing GRUB on $GRUB_TARGET_DRIVES..."
-        grub-install --target=i386-pc \
-                        --boot-directory=/boot \
-                        --recheck \
-                        "$GRUB_TARGET_DRIVES"
-    fi
+  
 
     if [ $? -ne 0 ]; then
         log_error "[RUN_BOOTLOADER] Error installing GRUB on $GRUB_TARGET_DRIVES"
         exit 1
     fi
     
-    if [ $? -ne 0 ]; then
-        log_error "[RUN_BOOTLOADER] Error installing GRUB on $GRUB_TARGET_DRIVES"
-        exit 1
-    fi
     
     log "[RUN_BOOTLOADER] Updating GRUB configuration..."
     if ! update-grub; then
