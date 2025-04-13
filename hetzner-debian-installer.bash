@@ -482,7 +482,6 @@ configure_bootloader() {
     if [ -z "${GRUB_TARGET_DRIVES}" ]; then
         if [ "${PART_USE_RAID:-no}" = "yes" ]; then
             GRUB_TARGET_DRIVES="/dev/md0p1"
-            GRUB_TARGET_DRIVES="/dev/md0p1"
         else
             GRUB_TARGET_DRIVES="$PART_DRIVE1"
         fi
