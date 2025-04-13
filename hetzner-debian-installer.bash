@@ -736,37 +736,36 @@ run_bootloader() {
         fi
 
         if is_uefi_system; then
-            log "[RUN_BOOTLOADER] UEFI system detected. Installing GRUB with EFI support on $disk..."
-
-            # Если каталог /boot/efi не смонтирован, пытаемся его смонтировать
-            if ! mountpoint -q /boot/efi; then
-                log_error "[RUN_BOOTLOADER] EFI directory /boot/efi not mounted. Attempting to auto-mount..."
-                # Автоопределяем EFI-раздел (предполагается, что он имеет FSTYPE vfat)
-                efi_parts=($(lsblk -o NAME,FSTYPE -nr | awk '$2=="vfat"{print $1}'))
-                if [ ${#efi_parts[@]} -eq 1 ]; then
-                    EFI_DEVICE="/dev/${efi_parts[0]}"
-                    log "[RUN_BOOTLOADER] Auto-detected EFI partition: $EFI_DEVICE. Mounting to /boot/efi..."
-                    mkdir -p /boot/efi
-                    mount "$EFI_DEVICE" /boot/efi || { log_error "[RUN_BOOTLOADER] Failed to mount $EFI_DEVICE to /boot/efi. Exiting."; exit 1; }
-                else
-                    log_error "[RUN_BOOTLOADER] Unable to auto-detect EFI partition. Please mount /boot/efi manually or define EFI_DEVICE. Exiting."
+            # Если система UEFI, проверяем, что загрузочный раздел имеет формат vfat
+            if [ "$PART_BOOT_FS" = "vfat" ]; then
+                # Проверка, что EFI-путь смонтирован
+                if ! mountpoint -q /boot/efi; then
+                    log_error "[RUN_BOOTLOADER] EFI directory /boot/efi not mounted. Exiting."
                     exit 1
                 fi
+
+                log "[RUN_BOOTLOADER] UEFI system detected and boot filesystem is vfat. Installing GRUB with EFI support on $disk..."
+                # Если grub-efi не установлен, пытаемся его установить.
+                if ! grub-install --version | grep -q 'x86_64-efi'; then
+                    log "[RUN_BOOTLOADER] grub-efi-amd64 not detected. Attempting to install..."
+                    apt-get update && apt-get install -y grub-efi-amd64
+                fi
+
+                grub-install --target=x86_64-efi \
+                             --efi-directory=/boot/efi \
+                             --bootloader-id=debian \
+                             --recheck \
+                             --no-nvram \
+                             --removable
+            else
+                # Если загрузочный раздел не отформатирован как vfat, выбираем установку для BIOS
+                log "[RUN_BOOTLOADER] UEFI system detected but boot filesystem is '$PART_BOOT_FS' (expected 'vfat')."
+                log "[RUN_BOOTLOADER] Falling back to BIOS installation on $disk..."
+                grub-install --target=i386-pc \
+                             --boot-directory=/boot \
+                             --recheck \
+                             "$disk"
             fi
-
-            # Установка grub-efi-amd64, если не установлен
-            if ! grub-install --version | grep -q 'x86_64-efi'; then
-                log "[RUN_BOOTLOADER] grub-efi-amd64 not detected. Attempting to install..."
-                apt-get update && apt-get install -y grub-efi-amd64
-            fi
-
-            grub-install --target=x86_64-efi \
-                         --efi-directory=/boot/efi \
-                         --bootloader-id=debian \
-                         --recheck \
-                         --no-nvram \
-                         --removable
-
         else
             log "[RUN_BOOTLOADER] BIOS system detected. Installing GRUB on $disk..."
             grub-install --target=i386-pc \
@@ -794,6 +793,7 @@ run_bootloader() {
 
     log "[RUN_BOOTLOADER] Bootloader installation complete."
 }
+
 
 run_initial_config() {
     log "[Running] Applying initial system configuration..."
