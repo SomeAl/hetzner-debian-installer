@@ -483,7 +483,7 @@ configure_bootloader() {
     # то в случае RAID используем оба диска, иначе – только основной диск.
     if [ -z "${GRUB_TARGET_DRIVES[*]}" ]; then
         if [ "${PART_USE_RAID:-no}" = "yes" ]; then
-            GRUB_TARGET_DRIVES=("$PART_DRIVE1" "$PART_DRIVE2")
+            GRUB_TARGET_DRIVES=("${MOUNT_POINTS["BOOT"]}")
         else
             GRUB_TARGET_DRIVES=("$PART_DRIVE1")
         fi
