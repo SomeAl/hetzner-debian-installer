@@ -736,12 +736,38 @@ run_bootloader() {
         fi
 
         if is_uefi_system; then
-            # Если система UEFI, проверяем, что загрузочный раздел имеет формат vfat
+            # Проверка, что загрузочный раздел имеет формат vfat (требование для UEFI)
             if [ "$PART_BOOT_FS" = "vfat" ]; then
-                # Проверка, что EFI-путь смонтирован
+                # Если EFI-путь не смонтирован, пытаемся его смонтировать
                 if ! mountpoint -q /boot/efi; then
-                    log_error "[RUN_BOOTLOADER] EFI directory /boot/efi not mounted. Exiting."
-                    exit 1
+                    log_error "[RUN_BOOTLOADER] EFI directory /boot/efi not mounted. Attempting to auto-mount..."
+                    
+                    # Если переменная EFI_DEVICE задана, пытаемся смонтировать её
+                    if [ -n "$EFI_DEVICE" ]; then
+                        mount "$EFI_DEVICE" /boot/efi
+                        if [ $? -eq 0 ]; then
+                            log "[RUN_BOOTLOADER] Auto-mounted EFI partition from EFI_DEVICE: $EFI_DEVICE"
+                        else
+                            log_error "[RUN_BOOTLOADER] Failed to mount EFI_DEVICE: $EFI_DEVICE. Exiting."
+                            exit 1
+                        fi
+                    else
+                        # Пытаемся автоопределить EFI-партицию по типу VFAT
+                        EFI_DEVICE=$(blkid -o device -t TYPE=vfat | head -n1)
+                        if [ -n "$EFI_DEVICE" ]; then
+                            log "[RUN_BOOTLOADER] Detected EFI partition: $EFI_DEVICE. Mounting..."
+                            mount "$EFI_DEVICE" /boot/efi
+                            if [ $? -eq 0 ]; then
+                                log "[RUN_BOOTLOADER] EFI partition mounted successfully."
+                            else
+                                log_error "[RUN_BOOTLOADER] Failed to mount detected EFI partition $EFI_DEVICE. Exiting."
+                                exit 1
+                            fi
+                        else
+                            log_error "[RUN_BOOTLOADER] Unable to auto-detect EFI partition. Please mount /boot/efi manually or define EFI_DEVICE. Exiting."
+                            exit 1
+                        fi
+                    fi
                 fi
 
                 log "[RUN_BOOTLOADER] UEFI system detected and boot filesystem is vfat. Installing GRUB with EFI support on $disk..."
@@ -757,8 +783,9 @@ run_bootloader() {
                              --recheck \
                              --no-nvram \
                              --removable
+
             else
-                # Если загрузочный раздел не отформатирован как vfat, выбираем установку для BIOS
+                # Если загрузочный раздел не отформатирован как vfat, переходим в BIOS-режим
                 log "[RUN_BOOTLOADER] UEFI system detected but boot filesystem is '$PART_BOOT_FS' (expected 'vfat')."
                 log "[RUN_BOOTLOADER] Falling back to BIOS installation on $disk..."
                 grub-install --target=i386-pc \
@@ -793,6 +820,7 @@ run_bootloader() {
 
     log "[RUN_BOOTLOADER] Bootloader installation complete."
 }
+
 
 
 run_initial_config() {
