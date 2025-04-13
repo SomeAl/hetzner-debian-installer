@@ -83,28 +83,6 @@ fi
 
 set -eo pipefail
 
-# Auto-start inside screen session
-if [ -z "$STY" ]; then
-    if ! command -v screen &>/dev/null; then
-        echo "Installing screen..."
-        apt update && apt install -y screen
-        # Проверяем, установился ли screen
-        if ! command -v screen &>/dev/null; then
-            echo "Error: screen still not found after installation. Exiting." >&2
-            exit 1
-        fi
-    fi
-    echo "Launching installation inside screen session '$SESSION_NAME'..."
-    screen -dmS "$SESSION_NAME" bash "$0"
-    echo "Reconnect with: screen -r $SESSION_NAME"
-    exit 0
-fi
-
-# Переименование screen-сессии, если она уже запущена
-screen -S "$STY" -X sessionname "$SESSION_NAME"
-
-screen -r $SESSION_NAME
-
 ################################################################################################################################################
 ### HELPER FUNCTIONS ###
 
@@ -1018,6 +996,13 @@ configuring() {
     configure_cleanup
 }
 
+running() {
+    #run_partitioning
+    #run_debian_install
+    #run_network
+    run_in_chroot
+}
+
 if [ "$1" = "secondstep" ]; then
     # Выполнение функций run_bootloader, run_initial_config и run_cleanup
     run_bootloader
@@ -1026,13 +1011,27 @@ if [ "$1" = "secondstep" ]; then
     exit 0
 fi
 
+# Auto-start inside screen session
+if [ -z "$STY" ]; then
+    if ! command -v screen &>/dev/null; then
+        echo "Installing screen..."
+        apt update && apt install -y screen
+        # Проверяем, установился ли screen
+        if ! command -v screen &>/dev/null; then
+            echo "Error: screen still not found after installation. Exiting." >&2
+            exit 1
+        fi
+    fi
+    echo "Launching installation inside screen session '$SESSION_NAME'..."
+    screen -dmS "$SESSION_NAME" bash "$0"
+    echo "Reconnect with: screen -r $SESSION_NAME"
+    exit 0
+fi
 
-running() {
-    #run_partitioning
-    #run_debian_install
-    #run_network
-    run_in_chroot
-}
+# Переименование screen-сессии, если она уже запущена
+screen -S "$STY" -X sessionname "$SESSION_NAME"
+
+screen -r $SESSION_NAME
 
 # Load config file if exists
 if [ -f "$CONFIG_FILE" ]; then
