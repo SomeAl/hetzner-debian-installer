@@ -682,29 +682,11 @@ run_network() {
 run_bootloader() {
     log "[RUN_BOOTLOADER] Running Bootloader installation..."
 
-    if is_uefi_system; then
-        log "[RUN_BOOTLOADER] UEFI system detected and boot filesystem is vfat. Installing GRUB with EFI support on $GRUB_TARGET_DRIVES..."
-        # Если grub-efi не установлен, пытаемся его установить.
-        if ! grub-install --version | grep -q 'x86_64-efi'; then
-            log "[RUN_BOOTLOADER] grub-efi-amd64 not detected. Attempting to install..."
-            apt-get update && apt-get install -y grub-efi-amd64
-        fi
-
-        grub-install --target=x86_64-efi \
-                        --efi-directory=/boot/efi \
-                        --bootloader-id=debian \
-                        --recheck \
-                        --no-nvram \
-                        --removable
-
-    else
-        log "[RUN_BOOTLOADER] BIOS system detected. Installing GRUB on $GRUB_TARGET_DRIVES..."
-        grub-install --target=i386-pc \
-                        --boot-directory=/boot \
-                        --recheck \
-                        "$GRUB_TARGET_DRIVES"
-    fi
-  
+    log "[RUN_BOOTLOADER] BIOS system detected. Installing GRUB on $GRUB_TARGET_DRIVES..."
+    grub-install --target=i386-pc \
+                    --boot-directory=/boot \
+                    --recheck \
+                    "$GRUB_TARGET_DRIVES"
 
     if [ $? -ne 0 ]; then
         log_error "[RUN_BOOTLOADER] Error installing GRUB on $GRUB_TARGET_DRIVES"
