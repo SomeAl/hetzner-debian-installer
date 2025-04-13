@@ -682,7 +682,11 @@ run_network() {
 run_bootloader() {
     log "[RUN_BOOTLOADER] Running Bootloader installation..."
 
-    log "[RUN_BOOTLOADER] BIOS system detected. Installing GRUB on $GRUB_TARGET_DRIVES..."
+    
+    log "[RUN_BOOTLOADER] Download GRUB on $GRUB_TARGET_DRIVES..."
+    apt install --no-install-recommends grub-pc -y
+    
+    log "[RUN_BOOTLOADER] Install GRUB on $GRUB_TARGET_DRIVES..."
     grub-install --target=i386-pc \
                     --boot-directory=/boot \
                     --recheck \
@@ -896,9 +900,9 @@ configuring() {
 }
 
 running() {
-    run_partitioning
-    run_debian_install
-    run_network
+    #run_partitioning
+    #run_debian_install
+    #run_network
     run_in_chroot
 }
 
