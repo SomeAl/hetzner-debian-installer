@@ -481,7 +481,7 @@ configure_bootloader() {
     log "[CONFIGURE_BOOTLOADER] [Configuring] Bootloader parameters"
     if [ -z "${GRUB_TARGET_DRIVES}" ]; then
         if [ "${PART_USE_RAID:-no}" = "yes" ]; then
-            GRUB_TARGET_DRIVES="${MOUNT_POINTS["BOOT"]}"
+            GRUB_TARGET_DRIVES="/dev/md0p1"
         else
             GRUB_TARGET_DRIVES="$PART_DRIVE1"
         fi
@@ -686,84 +686,49 @@ run_bootloader() {
         exit 1
     fi
 
-    for disk in "${GRUB_TARGET_DRIVES[@]}"; do
-        if ! device_exists "$disk"; then
-            log_error "[RUN_BOOTLOADER] Device $disk not found. Exiting."
-            exit 1
-        fi
+    
+    if ! device_exists "$GRUB_TARGET_DRIVES"; then
+        log_error "[RUN_BOOTLOADER] Device $GRUB_TARGET_DRIVES not found. Exiting."
+        exit 1
+    fi
 
-        if is_uefi_system; then
-            # Проверка, что загрузочный раздел имеет формат vfat (требование для UEFI)
-            if [ "$PART_BOOT_FS" = "vfat" ]; then
-                # Если EFI-путь не смонтирован, пытаемся его смонтировать
-                if ! mountpoint -q /boot/efi; then
-                    log_error "[RUN_BOOTLOADER] EFI directory /boot/efi not mounted. Attempting to auto-mount..."
-                    
-                    # Если переменная EFI_DEVICE задана, пытаемся смонтировать её
-                    if [ -n "$EFI_DEVICE" ]; then
-                        mount "$EFI_DEVICE" /boot/efi
-                        if [ $? -eq 0 ]; then
-                            log "[RUN_BOOTLOADER] Auto-mounted EFI partition from EFI_DEVICE: $EFI_DEVICE"
-                        else
-                            log_error "[RUN_BOOTLOADER] Failed to mount EFI_DEVICE: $EFI_DEVICE. Exiting."
-                            exit 1
-                        fi
-                    else
-                        # Пытаемся автоопределить EFI-партицию по типу VFAT
-                        EFI_DEVICE=$(blkid -o device -t TYPE=vfat | head -n1)
-                        if [ -n "$EFI_DEVICE" ]; then
-                            log "[RUN_BOOTLOADER] Detected EFI partition: $EFI_DEVICE. Mounting..."
-                            mount "$EFI_DEVICE" /boot/efi
-                            if [ $? -eq 0 ]; then
-                                log "[RUN_BOOTLOADER] EFI partition mounted successfully."
-                            else
-                                log_error "[RUN_BOOTLOADER] Failed to mount detected EFI partition $EFI_DEVICE. Exiting."
-                                exit 1
-                            fi
-                        else
-                            log_error "[RUN_BOOTLOADER] Unable to auto-detect EFI partition. Please mount /boot/efi manually or define EFI_DEVICE. Exiting."
-                            exit 1
-                        fi
-                    fi
-                fi
-
-                log "[RUN_BOOTLOADER] UEFI system detected and boot filesystem is vfat. Installing GRUB with EFI support on $disk..."
-                # Если grub-efi не установлен, пытаемся его установить.
-                if ! grub-install --version | grep -q 'x86_64-efi'; then
-                    log "[RUN_BOOTLOADER] grub-efi-amd64 not detected. Attempting to install..."
-                    apt-get update && apt-get install -y grub-efi-amd64
-                fi
-
-                grub-install --target=x86_64-efi \
-                             --efi-directory=/boot/efi \
-                             --bootloader-id=debian \
-                             --recheck \
-                             --no-nvram \
-                             --removable
-
-            else
-                # Если загрузочный раздел не отформатирован как vfat, переходим в BIOS-режим
-                log "[RUN_BOOTLOADER] UEFI system detected but boot filesystem is '$PART_BOOT_FS' (expected 'vfat')."
-                log "[RUN_BOOTLOADER] Falling back to BIOS installation on $disk..."
-                grub-install --target=i386-pc \
-                             --boot-directory=/boot \
-                             --recheck \
-                             "$disk"
+    if is_uefi_system; then
+            log "[RUN_BOOTLOADER] UEFI system detected and boot filesystem is vfat. Installing GRUB with EFI support on $GRUB_TARGET_DRIVES..."
+            # Если grub-efi не установлен, пытаемся его установить.
+            if ! grub-install --version | grep -q 'x86_64-efi'; then
+                log "[RUN_BOOTLOADER] grub-efi-amd64 not detected. Attempting to install..."
+                apt-get update && apt-get install -y grub-efi-amd64
             fi
+
+            grub-install --target=x86_64-efi \
+                            --efi-directory=/boot/efi \
+                            --bootloader-id=debian \
+                            --recheck \
+                            --no-nvram \
+                            --removable
+
         else
-            log "[RUN_BOOTLOADER] BIOS system detected. Installing GRUB on $disk..."
+            # Если загрузочный раздел не отформатирован как vfat, переходим в BIOS-режим
+            log "[RUN_BOOTLOADER] UEFI system detected but boot filesystem is '$PART_BOOT_FS' (expected 'vfat')."
+            log "[RUN_BOOTLOADER] Falling back to BIOS installation on $GRUB_TARGET_DRIVES..."
             grub-install --target=i386-pc \
-                         --boot-directory=/boot \
-                         --recheck \
-                         "$disk"
+                            --boot-directory=/boot \
+                            --recheck \
+                            "$GRUB_TARGET_DRIVES"
         fi
+    else
+        log "[RUN_BOOTLOADER] BIOS system detected. Installing GRUB on $GRUB_TARGET_DRIVES..."
+        grub-install --target=i386-pc \
+                        --boot-directory=/boot \
+                        --recheck \
+                        "$GRUB_TARGET_DRIVES"
+    fi
 
-        if [ $? -ne 0 ]; then
-            log_error "[RUN_BOOTLOADER] Error installing GRUB on $disk"
-            exit 1
-        fi
-    done
-
+    if [ $? -ne 0 ]; then
+        log_error "[RUN_BOOTLOADER] Error installing GRUB on $GRUB_TARGET_DRIVES"
+        exit 1
+    fi
+    
     log "[RUN_BOOTLOADER] Updating GRUB configuration..."
     if ! update-grub; then
         log_error "[RUN_BOOTLOADER] update-grub failed"
